@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading OS — Premium Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+/* ── NEW PREMIUM DESIGN SYSTEM ── */
+:root {
+  --bg-primary: #08090B;
+  --bg-secondary: #0E1116;
+  --bg-tertiary: #151922;
+  --surface-1: rgba(255, 255, 255, 0.03);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-hover: rgba(255, 255, 255, 0.12);
+  --gold: #D6B36A;
+  --green: #2FD4A7;
+  --red: #F05A78;
+  --cyan: #67B7FF;
+  --text-primary: #F5F7FA;
+  --text-secondary: #A1A8B3;
+  --text-muted: #5D6572;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; font-size: 14px; line-height: 1.6; display: flex; }
+
+/* ── SIDEBAR (THE NEW NAV) ── */
+.sidebar { width: 260px; background: var(--bg-secondary); border-right: 1px solid var(--border); height: 100vh; position: fixed; left: 0; top: 0; display: flex; flex-direction: column; padding: var(--space-5) var(--space-4); z-index: 100; }
+.sidebar-logo { font-size: 14px; font-weight: 600; letter-spacing: 0.05em; color: var(--text-primary); margin-bottom: var(--space-6); display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
+.sidebar-logo span { color: var(--gold); }
+.nav-item { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); font-size: 13px; font-weight: 500; transition: all 0.2s; display: flex; align-items: center; gap: 10px; border: 1px solid transparent; margin-bottom: 2px; }
+.nav-item:hover { color: var(--text-primary); background: var(--surface-1); }
+.nav-item.active { color: var(--gold); background: rgba(214, 179, 106, 0.08); border-color: rgba(214, 179, 106, 0.15); }
+.user-profile { margin-top: auto; padding: var(--space-3); background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; align-items: center; gap: 10px; }
+.user-avatar { width: 32px; height: 32px; background: var(--bg-tertiary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 1px solid var(--border); }
+
+/* ── MAIN WORKSPACE ── */
+.workspace { margin-left: 260px; flex: 1; padding: var(--space-6) 40px; max-width: 1400px; }
+.page { display: none; animation: fadeIn 0.3s ease; }
+.page.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── HERO & COMMAND CENTER ── */
+.hero-section { margin-bottom: var(--space-6); }
+.hero-greeting { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 4px; }
+.hero-sub { color: var(--text-secondary); font-size: 14px; }
+.status-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 20px; background: rgba(47, 212, 167, 0.1); border: 1px solid rgba(47, 212, 167, 0.2); color: var(--green); font-size: 12px; font-weight: 500; margin-top: var(--space-3); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0% {box-shadow: 0 0 0 0 rgba(47, 212, 167, 0.4);} 70% {box-shadow: 0 0 0 6px rgba(47, 212, 167, 0);} 100% {box-shadow: 0 0 0 0 rgba(47, 212, 167, 0);} }
+
+/* ── METRICS STRIP ── */
+.metrics-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-6); }
+.metric-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-4); transition: border-color 0.2s, transform 0.2s; backdrop-filter: blur(10px); }
+.metric-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+.metric-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: var(--space-2); }
+.metric-val { font-size: 24px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+/* ── INSIGHT BEAMS ── */
+.insight-beams { display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-6); }
+.insight-beam { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4); background: linear-gradient(90deg, rgba(214, 179, 106, 0.05) 0%, transparent 100%); border-left: 2px solid var(--gold); border-radius: 0 var(--radius-md) var(--radius-md) 0; }
+.insight-beam.danger { border-left-color: var(--red); background: linear-gradient(90deg, rgba(240, 90, 120, 0.05) 0%, transparent 100%); }
+.beam-icon { font-size: 18px; }
+.beam-text { font-size: 14px; color: var(--text-primary); }
+
+/* ── NEW JOURNAL (TRADE CAPSULES) ── */
+.journal-controls { display: flex; justify-content: space-between; margin-bottom: var(--space-5); align-items: center; }
+.trade-capsule { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-5); margin-bottom: var(--space-4); transition: border-color 0.2s; }
+.trade-capsule:hover { border-color: var(--gold); }
+.tc-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--surface-2); padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
+.tc-title { display: flex; align-items: center; gap: var(--space-3); }
+.tc-asset { font-size: 16px; font-weight: 600; }
+.tc-tag { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: var(--surface-1); color: var(--text-secondary); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+.tc-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4); }
+.tc-input-group { display: flex; flex-direction: column; gap: 4px; }
+.tc-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+.tc-input { background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.2s; }
+.tc-input:focus { border-color: var(--gold); }
+.tc-footer { margin-top: var(--space-4); display: flex; gap: var(--space-3); }
+.tc-notes { flex: 1; background: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); padding: 10px 12px; border-radius: var(--radius-sm); font-size: 13px; outline: none; resize: vertical; min-height: 40px; }
+
+/* ── BUTTONS & UTILS ── */
+.btn { padding: 10px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 13px; font-weight: 500; border: none; transition: all 0.2s; }
+.btn-primary { background: var(--gold); color: #000; }
+.btn-primary:hover { background: #E5C37A; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-primary); }
+.btn-outline:hover { background: var(--surface-1); border-color: var(--border-hover); }
+
+/* NAME OVERLAY */
+#nameOverlay { position: fixed; inset: 0; z-index: 9999; background: rgba(8, 9, 11, 0.98); display: flex; align-items: center; justify-content: center; }
+.name-box { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-6); max-width: 400px; width: 90%; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="nameOverlay" style="display:none;">
+  <div class="name-box">
+    <div style="font-size:32px; margin-bottom:16px;">⬛</div>
+    <h2 style="font-size:20px; font-weight:600; margin-bottom:8px;">Trading OS Initialization</h2>
+    <p style="color:var(--text-secondary); font-size:13px; margin-bottom:24px;">Enter your trader ID to access the Command Center.</p>
+    <input class="tc-input" id="nameInput" type="text" placeholder="Your Name" style="width:100%; margin-bottom:16px; text-align:center;" maxlength="24" onkeydown="if(event.key==='Enter')confirmName()" autofocus />
+    <button class="btn btn-primary" style="width:100%;" onclick="confirmName()">Boot System</button>
+  </div>
+</div>
+
+<nav class="sidebar">
+  <div class="sidebar-logo"><span>⬛</span> Trading OS</div>
+  
+  <div class="nav-item active" onclick="showPage('command-center', this)">⚡ Command Center</div>
+  <div class="nav-item" onclick="showPage('journal', this)">📝 Trade Journal</div>
+  <div class="nav-item" onclick="showPage('psychology', this)">🧠 Psychology</div>
+  <div class="nav-item" onclick="showPage('analytics', this)">📈 Analytics</div>
+  
+  <div style="margin-top:20px; margin-bottom:10px; font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; padding-left:16px;">System</div>
+  <div class="nav-item" onclick="showPage('strategy', this)">🔬 Strategy Lab</div>
+  
+  <div class="user-profile">
+    <div class="user-avatar">👤</div>
+    <div>
+      <div id="navUserBadge" style="font-weight:500; font-size:13px;">Guest</div>
+      <div style="font-size:11px; color:var(--green); display:flex; align-items:center; gap:4px;"><span class="status-dot" style="width:4px;height:4px;"></span> Synced</div>
+    </div>
+  </div>
+</nav>
+
+<main class="workspace">
+  
+  <div id="page-command-center" class="page active">
+    <div class="hero-section">
+      <h1 class="hero-greeting" id="heroGreeting">Good Evening, Trader.</h1>
+      <div class="hero-sub">Session active. Market structure is resolving.</div>
+      <div class="status-pill"><span class="status-dot"></span> Discipline Score: 84 | Focus State: Stable</div>
+    </div>
+
+    <div class="insight-beams">
+      <div class="insight-beam">
+        <span class="beam-icon">✨</span>
+        <span class="beam-text"><strong>Edge Discovery:</strong> London liquidity sweep setups are currently producing your highest expectancy.</span>
+      </div>
+      <div class="insight-beam danger">
+        <span class="beam-icon">⚠️</span>
+        <span class="beam-text"><strong>Behavioral Alert:</strong> Your winrate drops by 31% after two consecutive losses. Maintain risk discipline today.</span>
+      </div>
+    </div>
+
+    <div class="metrics-strip">
+      <div class="metric-card"><div class="metric-lbl">Total PnL (Pips)</div><div class="metric-val" id="cc-pips" style="color:var(--gold)">0</div></div>
+      <div class="metric-card"><div class="metric-lbl">Win Rate</div><div class="metric-val" id="cc-wr">0%</div></div>
+      <div class="metric-card"><div class="metric-lbl">Profit Factor</div><div class="metric-val" id="cc-pf">—</div></div>
+      <div class="metric-card"><div class="metric-lbl">Avg R:R</div><div class="metric-val" id="cc-rr">—</div></div>
+    </div>
+
+    <div class="metric-card" style="height:300px; position:relative;">
+      <div class="metric-lbl" style="margin-bottom:16px;">Performance Volatility (Equity Curve)</div>
+      <canvas id="equityChart"></canvas>
+    </div>
+  </div>
+
+  <div id="page-journal" class="page">
+    <div class="hero-section" style="margin-bottom:24px;">
+      <h1 class="hero-greeting">Trade Journal</h1>
+      <div class="hero-sub">Your live trading archive. Built for execution quality.</div>
+    </div>
+    
+    <div class="journal-controls">
+      <select class="tc-input" id="daySelect" onchange="loadDay()" style="width:200px;"></select>
+      <div style="display:flex; gap:12px;">
+        <button class="btn btn-outline" onclick="addTradeCard()">+ Add Execution</button>
+        <button class="btn btn-primary" onclick="saveTrades()">💾 Save & Sync</button>
+      </div>
+    </div>
+
+    <div id="tradesContainer"></div>
+  </div>
+
+  <div id="page-psychology" class="page"><h1 class="hero-greeting">Psychology Engine</h1><p class="hero-sub">Coming soon. Institutional emotional tracking.</p></div>
+  <div id="page-analytics" class="page"><h1 class="hero-greeting">Deep Analytics</h1><p class="hero-sub">Coming soon. Multi-layer intelligence.</p></div>
+  <div id="page-strategy" class="page"><h1 class="hero-greeting">Strategy Lab</h1><p class="hero-sub">Manage your SD Zones PRO indicators and setups here.</p></div>
+
+</main>
+
+<script>
+// ══════════════ CORE STATE & INIT ══════════════
+let db = null, currentUser = localStorage.getItem('sdHubUsername') || '', currentDay = 1, localData = {};
+let equityChartInst = null;
+const startDate = new Date(2026, 4, 8);
+const DAYS = Array.from({length: 30}, (_, i) => { 
+  const d = new Date(startDate); d.setDate(startDate.getDate() + i); 
+  return { n: i + 1, label: `Session ${i + 1} — ${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}`}; 
+});
+
+window.addEventListener('load', function() {
+  firebase.initializeApp({ apiKey: "AIzaSyCztMCUt9pX4caEDXobxI6Y6GP4LTFI-gg", authDomain: "sd-indikator-by-jason.firebaseapp.com", projectId: "sd-indikator-by-jason" });
+  db = firebase.firestore();
+  if(!currentUser) { document.getElementById('nameOverlay').style.display='flex'; } else { startApp(); }
+});
+
+function confirmName() {
+  const val = document.getElementById('nameInput').value.trim();
+  if(!val || val.length < 2) return;
+  currentUser = val;
+  localStorage.setItem('sdHubUsername', val);
+  document.getElementById('nameOverlay').style.display = 'none';
+  startApp();
+}
+
+function startApp() {
+  document.getElementById('navUserBadge').textContent = currentUser;
+  setGreeting();
+  initDaySelect();
+  loadDay();
+  updateOverview();
+}
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(id === 'command-center') updateOverview();
+}
+
+function setGreeting() {
+  const hr = new Date().getHours();
+  const greeting = hr < 12 ? 'Good Morning' : hr < 18 ? 'Good Afternoon' : 'Good Evening';
+  document.getElementById('heroGreeting').textContent = `${greeting}, ${currentUser}.`;
+}
+
+// ══════════════ JOURNAL (CARDS) ══════════════
+function initDaySelect() {
+  const sel = document.getElementById('daySelect');
+  sel.innerHTML = DAYS.map(d => `<option value="${d.n}">${d.label}</option>`).join('');
+}
+
+function defaultTrades() { return [{ symbol: 'BTCUSD', tf: 'M15', setup: 'Liquidity Sweep', dir: 'BUY', pips: '', rr: '', emotion: 'Neutral', notes: '' }]; }
+
+async function loadDay() {
+  currentDay = parseInt(document.getElementById('daySelect').value);
+  try {
+    const doc = await db.collection('journals').doc(currentUser).collection('days').doc('day'+currentDay).get();
+    localData = doc.exists ? doc.data() : { trades: defaultTrades() };
+    renderTradeCards(localData.trades || defaultTrades());
+  } catch(e) { renderTradeCards(defaultTrades()); }
+}
+
+function renderTradeCards(trades) {
+  const container = document.getElementById('tradesContainer');
+  container.innerHTML = '';
+  trades.forEach((t, i) => {
+    const capsule = document.createElement('div');
+    capsule.className = 'trade-capsule';
+    capsule.innerHTML = `
+      <div class="tc-header">
+        <div class="tc-title">
+          <input type="text" class="tc-input" style="font-weight:600; width:100px; padding:4px 8px;" value="${t.symbol||''}" onchange="setField(${i},'symbol',this.value)" placeholder="Symbol" />
+          <select class="tc-input" style="padding:4px 8px;" onchange="setField(${i},'dir',this.value)">
+            <option ${t.dir==='BUY'?'selected':''}>LONG</option>
+            <option ${t.dir==='SELL'?'selected':''}>SHORT</option>
+          </select>
+          <span class="tc-tag">EXECUTION #${i+1}</span>
+        </div>
+      </div>
+      <div class="tc-grid">
+        <div class="tc-input-group"><span class="tc-label">Timeframe</span><input type="text" class="tc-input" value="${t.tf||''}" onchange="setField(${i},'tf',this.value)" placeholder="e.g. M15"/></div>
+        <div class="tc-input-group"><span class="tc-label">Setup Type</span><input type="text" class="tc-input" value="${t.setup||''}" onchange="setField(${i},'setup',this.value)" placeholder="e.g. Breakout"/></div>
+        <div class="tc-input-group"><span class="tc-label">Result (Pips/%)</span><input type="number" class="tc-input" value="${t.pips||''}" onchange="setField(${i},'pips',this.value)"/></div>
+        <div class="tc-input-group"><span class="tc-label">Realized R:R</span><input type="number" step="0.1" class="tc-input" value="${t.rr||''}" onchange="setField(${i},'rr',this.value)"/></div>
+      </div>
+      <div class="tc-footer">
+        <div class="tc-input-group" style="width:150px;"><span class="tc-label">State of Mind</span><select class="tc-input" onchange="setField(${i},'emotion',this.value)"><option ${t.emotion==='Neutral'?'selected':''}>Neutral</option><option ${t.emotion==='Focused'?'selected':''}>Focused</option><option ${t.emotion==='FOMO'?'selected':''}>FOMO</option><option ${t.emotion==='Revenge'?'selected':''}>Revenge</option></select></div>
+        <textarea class="tc-notes" placeholder="Execution breakdown, psychological notes, AI observations..." onchange="setField(${i},'notes',this.value)">${t.notes||''}</textarea>
+      </div>
+    `;
+    container.appendChild(capsule);
+  });
+}
+
+function setField(idx, field, val) {
+  if(!localData.trades) localData.trades = defaultTrades();
+  localData.trades[idx][field] = val;
+}
+
+function addTradeCard() {
+  if(!localData.trades) localData.trades = [];
+  localData.trades.push({ symbol: 'XAUUSD', tf: 'M5', setup: '', dir: 'LONG', pips: '', rr: '', emotion: 'Neutral', notes: '' });
+  renderTradeCards(localData.trades);
+}
+
+async function saveTrades() {
+  try {
+    await db.collection('journals').doc(currentUser).collection('days').doc('day'+currentDay).set(localData);
+    updateOverview();
+    alert("System Synced Successfully.");
+  } catch(e) { console.error(e); }
+}
+
+// ══════════════ COMMAND CENTER ANALYTICS ══════════════
+async function updateOverview() {
+  try {
+    const snap = await db.collection('journals').doc(currentUser).collection('days').get();
+    let pips=0, trades=0, wins=0, losses=0, rrSum=0, rrCount=0;
+    const equityPoints = [0]; const labels = ['Boot'];
+    
+    DAYS.forEach(d => {
+      const doc = snap.docs.find(doc => doc.id === 'day'+d.n);
+      const dayData = doc ? doc.data() : null;
+      let dayPips = 0;
+      if(dayData && dayData.trades) {
+        dayData.trades.forEach(t => {
+          if(t.pips !== '' && t.pips !== null) {
+            trades++;
+            const p = parseFloat(t.pips); dayPips += p; pips += p;
+            if(p > 0) wins++; else if(p < 0) losses++;
+            if(t.rr) { rrSum += parseFloat(t.rr); rrCount++; }
+          }
+        });
+      }
+      equityPoints.push(pips); labels.push('S'+d.n);
+    });
+
+    document.getElementById('cc-pips').textContent = pips > 0 ? '+'+pips.toFixed(1) : pips.toFixed(1);
+    document.getElementById('cc-pips').style.color = pips >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('cc-wr').textContent = trades ? Math.round((wins/trades)*100)+'%' : '0%';
+    document.getElementById('cc-rr').textContent = rrCount ? (rrSum/rrCount).toFixed(1) : '—';
+    
+    buildChart(labels, equityPoints);
+  } catch(e) { console.error(e); }
+}
+
+function buildChart(labels, data) {
+  if(equityChartInst) equityChartInst.destroy();
+  const ctx = document.getElementById('equityChart');
+  Chart.defaults.color = '#A1A8B3';
+  Chart.defaults.font.family = "'Inter', sans-serif";
+  
+  equityChartInst = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{
+        data, borderColor: '#D6B36A', backgroundColor: 'rgba(214, 179, 106, 0.05)',
+        borderWidth: 2, fill: true, tension: 0.4, pointRadius: 0, pointHitRadius: 10
+    }]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, backgroundColor: '#151922', titleColor: '#D6B36A' } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.02)' } },
+        y: { grid: { color: 'rgba(255,255,255,0.02)' } }
+      },
+      interaction: { mode: 'nearest', axis: 'x', intersect: false }
+    }
+  });
+}
+</script>
+</body>
+</html>
