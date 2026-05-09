@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SD Zones PRO — Trading Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+  :root {
+    --bg: #0a0b0d;
+    --bg2: #111318;
+    --bg3: #181c22;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --gold: #d4a843;
+    --gold2: #f0c060;
+    --green: #2dd4a0;
+    --red: #f05070;
+    --blue: #5b8dee;
+    --text: #e8e9eb;
+    --text2: #8b9098;
+    --text3: #555b63;
+    --radius: 10px;
+    --radius2: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Space Grotesk', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
+
+  /* ── SETUP OVERLAY ── */
+  #setupOverlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(10,11,13,0.97);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .setup-box {
+    background: var(--bg2); border: 0.5px solid var(--border2);
+    border-radius: 20px; padding: 2.5rem; max-width: 560px; width: 90%;
+  }
+  .setup-box h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+  .setup-box p { color: var(--text2); font-size: 13px; margin-bottom: 1.5rem; line-height: 1.7; }
+  .setup-step {
+    background: var(--bg3); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin-bottom: 1rem;
+  }
+  .setup-step h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--gold); }
+  .setup-step p { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .setup-input {
+    width: 100%; background: var(--bg); border: 0.5px solid var(--border2);
+    color: var(--text); padding: 8px 12px; border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; outline: none;
+    margin-bottom: 6px;
+  }
+  .setup-input:focus { border-color: var(--gold); }
+  .setup-note { font-size: 11px; color: var(--text3); }
+  .btn-gold-lg {
+    width: 100%; padding: 12px; border-radius: 8px; cursor: pointer;
+    font-size: 14px; font-family: inherit; border: none;
+    background: var(--gold); color: #0a0b0d; font-weight: 700;
+    margin-top: 1rem; transition: background 0.15s;
+  }
+  .btn-gold-lg:hover { background: var(--gold2); }
+  #setupError { color: var(--red); font-size: 12px; margin-top: 8px; display: none; }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,11,13,0.92); backdrop-filter: blur(12px);
+    border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 2rem; height: 56px;
+  }
+  .nav-logo { font-size: 15px; font-weight: 600; letter-spacing: 0.03em; display: flex; align-items: center; gap: 8px; }
+  .nav-logo span { color: var(--gold); }
+  .nav-tabs { display: flex; gap: 4px; }
+  .nav-tab {
+    padding: 6px 14px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--text2); border: none; background: none;
+    transition: all 0.15s; font-family: inherit;
+  }
+  .nav-tab:hover { color: var(--text); background: var(--bg3); }
+  .nav-tab.active { color: var(--gold); background: rgba(212,168,67,0.1); }
+  .nav-right { display: flex; align-items: center; gap: 10px; }
+  .nav-user-badge {
+    font-size: 12px; color: var(--gold);
+    background: rgba(212,168,67,0.1); padding: 4px 12px; border-radius: 6px;
+    border: 0.5px solid rgba(212,168,67,0.2); display: none;
+  }
+  .sync-indicator { font-size: 11px; color: var(--text3); display: flex; align-items: center; gap: 5px; }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── PAGES ── */
+  .page { display: none; padding: 2rem; max-width: 1200px; margin: 0 auto; }
+  .page.active { display: block; }
+  .section-header { margin-bottom: 1.5rem; }
+  .section-header h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .section-header p { color: var(--text2); font-size: 13px; }
+
+  /* ── CARDS ── */
+  .card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius2); padding: 1.25rem; }
+  .card-title { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text3); margin-bottom: 0.75rem; }
+
+  /* ── OVERVIEW ── */
+  .overview-grid { display: grid; gap: 1rem; grid-template-columns: repeat(4, 1fr); margin-bottom: 1rem; }
+  .stat-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
+  .stat-val { font-size: 28px; font-weight: 700; margin-bottom: 2px; }
+  .stat-lbl { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── JOURNAL ── */
+  .journal-toolbar { display: flex; gap: 10px; margin-bottom: 1.25rem; align-items: center; flex-wrap: wrap; }
+  .day-select { background: var(--bg3); border: 0.5px solid var(--border2); color: var(--text); padding: 6px 12px; border-radius: 6px; font-family: inherit; font-size: 13px; outline: none; cursor: pointer; }
+  .trade-header {
+    font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text3);
+    border-bottom: 0.5px solid var(--border); padding: 0 1rem 8px;
+    display: grid; gap: 8px;
+    grid-template-columns: 36px 100px 70px 110px 80px 80px 65px 65px 65px 1fr;
+    align-items: center; margin-bottom: 4px;
+  }
+  .trade-row {
+    background: var(--bg3); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px 1rem;
+    display: grid; gap: 8px;
+    grid-template-columns: 36px 100px 70px 110px 80px 80px 65px 65px 65px 1fr;
+    align-items: center; margin-bottom: 6px;
+  }
+  .trade-row input, .trade-row select {
+    background: var(--bg2); border: 0.5px solid var(--border); color: var(--text);
+    padding: 5px 8px; border-radius: 6px; font-family: inherit; font-size: 13px;
+    outline: none; width: 100%; transition: border-color 0.15s;
+  }
+  .trade-row input:focus, .trade-row select:focus { border-color: var(--gold); }
+  .trade-num { color: var(--text3); font-size: 12px; font-weight: 500; text-align: center; }
+  .checkbox-cell { display: flex; justify-content: center; }
+  .checkbox-cell input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--green); cursor: pointer; }
+  .pips-pos { color: var(--green) !important; font-weight: 600; }
+  .pips-neg { color: var(--red) !important; font-weight: 600; }
+  .daily-summary {
+    background: linear-gradient(135deg, rgba(212,168,67,0.08), transparent);
+    border: 0.5px solid rgba(212,168,67,0.2); border-radius: var(--radius);
+    padding: 0.875rem 1.25rem; display: flex; gap: 2rem; align-items: flex-start;
+    flex-wrap: wrap; margin-top: 1rem;
+  }
+  .ds-item { display: flex; flex-direction: column; gap: 2px; }
+  .ds-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text3); }
+  .ds-val { font-size: 18px; font-weight: 600; }
+  .notes-input {
+    background: var(--bg3); border: 0.5px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 13px;
+    outline: none; width: 100%; min-height: 60px; resize: vertical;
+  }
+  .notes-input:focus { border-color: var(--gold); }
+  .save-status { font-size: 12px; color: var(--text3); margin-left: auto; display: flex; align-items: center; gap: 5px; }
+
+  /* ── COMMUNITY ── */
+  .traders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+  .trader-card {
+    background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius2);
+    padding: 1.25rem; cursor: pointer; transition: border-color 0.15s;
+  }
+  .trader-card:hover { border-color: var(--gold); }
+  .trader-card.mine { border-color: rgba(212,168,67,0.3); }
+  .trader-name { font-weight: 600; font-size: 15px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .trader-badge { font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(212,168,67,0.15); color: var(--gold); font-weight: 500; }
+  .trader-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px; }
+  .ts-item { text-align: center; }
+  .ts-val { font-size: 16px; font-weight: 600; }
+  .ts-lbl { font-size: 10px; color: var(--text3); }
+  .last-updated { font-size: 11px; color: var(--text3); margin-top: 8px; }
+  #traderDetail { margin-top: 1.5rem; }
+  .empty-state { color: var(--text3); padding: 3rem; text-align: center; font-size: 14px; }
+
+  /* ── LEGEND ── */
+  .legend-search {
+    background: var(--bg3); border: 0.5px solid var(--border2); color: var(--text);
+    padding: 8px 14px; border-radius: 8px; font-family: inherit; font-size: 14px;
+    outline: none; width: 100%; max-width: 400px; margin-bottom: 1.5rem;
+  }
+  .legend-search:focus { border-color: var(--gold); }
+  .legend-group { margin-bottom: 2rem; }
+  .legend-group-title {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--gold); margin-bottom: 0.75rem; padding-bottom: 6px;
+    border-bottom: 0.5px solid rgba(212,168,67,0.2); display: flex; align-items: center; gap: 8px;
+  }
+  .legend-items { display: grid; gap: 8px; }
+  .legend-item {
+    background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start;
+  }
+  .legend-item.has-toggle { grid-template-columns: 1fr auto; }
+  .li-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .li-desc { font-size: 12px; color: var(--text2); line-height: 1.55; }
+  .li-options { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .li-default { font-size: 10px; color: var(--text3); font-family: 'JetBrains Mono', monospace; background: var(--bg3); padding: 2px 8px; border-radius: 4px; white-space: nowrap; align-self: start; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; cursor: pointer; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; border-radius: 20px; background: var(--bg3); border: 0.5px solid var(--border2); transition: 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; height: 12px; width: 12px; left: 3px; bottom: 3px; border-radius: 50%; background: var(--text3); transition: 0.2s; }
+  .toggle-switch input:checked + .toggle-slider { background: rgba(212,168,67,0.2); border-color: var(--gold); }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); background: var(--gold); }
+
+  /* ── HOSTING ── */
+  .platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1rem 0 1.5rem; }
+  .platform-card { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: center; }
+  .platform-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .platform-badge { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 4px; background: rgba(45,212,160,0.15); color: var(--green); margin-bottom: 8px; }
+  .platform-desc { font-size: 12px; color: var(--text2); }
+  .hosting-steps { display: grid; gap: 1rem; }
+  .h-step { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius2); padding: 1.25rem; display: flex; gap: 1rem; }
+  .h-step-num { width: 32px; height: 32px; border-radius: 50%; background: rgba(212,168,67,0.15); border: 1px solid rgba(212,168,67,0.3); color: var(--gold); font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .h-step-body h3 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .h-step-body p { font-size: 13px; color: var(--text2); margin-bottom: 8px; }
+  .code-block { background: var(--bg); border: 0.5px solid var(--border2); border-radius: 6px; padding: 10px 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #c5d0e6; overflow-x: auto; white-space: pre; }
+  .code-block .cmd { color: var(--gold); }
+  .code-block .cmt { color: var(--text3); }
+  .divider { height: 0.5px; background: var(--border); margin: 1.5rem 0; }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; z-index: 9998; background: var(--bg3); border: 0.5px solid var(--border2); border-radius: 8px; padding: 10px 18px; font-size: 13px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+
+  /* ── LOADING ── */
+  .loading { color: var(--text3); font-size: 13px; padding: 2rem; text-align: center; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--border2); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; margin-right: 8px; vertical-align: middle; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .btn-sm { padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; font-family: inherit; border: 0.5px solid var(--border2); background: var(--bg3); color: var(--text2); transition: all 0.15s; }
+  .btn-sm:hover { color: var(--text); border-color: var(--gold); }
+  .btn-gold { background: var(--gold); color: #0a0b0d; border: none; font-weight: 600; }
+  .btn-gold:hover { background: var(--gold2); color: #0a0b0d; }
+
+  @media (max-width: 900px) {
+    .overview-grid { grid-template-columns: repeat(2, 1fr); }
+    .charts-row { grid-template-columns: 1fr; }
+    .platform-grid { grid-template-columns: 1fr; }
+    .trade-header, .trade-row { grid-template-columns: 30px 1fr 1fr 1fr 1fr; }
+    nav { padding: 0 1rem; }
+    .nav-tabs .nav-tab { padding: 6px 10px; font-size: 12px; }
+  }
+
+  /* MY SETTINGS PANEL */
+  .my-settings-banner{background:linear-gradient(135deg,rgba(212,168,67,.12),rgba(212,168,67,.03));border:1px solid rgba(212,168,67,.35);border-radius:var(--radius2);padding:1.25rem 1.5rem;margin-bottom:2rem;}
+  .msb-header{display:flex;align-items:center;gap:10px;margin-bottom:1rem;}
+  .msb-header h2{font-size:15px;font-weight:600;}
+  .msb-badge{font-size:10px;padding:3px 10px;border-radius:4px;background:var(--gold);color:#0a0b0d;font-weight:700;letter-spacing:.04em;white-space:nowrap;}
+  .msb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;}
+  .msb-item{background:var(--bg3);border:0.5px solid var(--border2);border-radius:8px;padding:10px 14px;display:flex;flex-direction:column;gap:3px;}
+  .msb-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);}
+  .msb-val{font-size:22px;font-weight:700;color:var(--gold);font-family:'JetBrains Mono',monospace;}
+  .msb-note{font-size:11px;color:var(--text2);line-height:1.4;}
+  .li-mine{font-size:10px;color:var(--gold);font-family:'JetBrains Mono',monospace;background:rgba(212,168,67,.12);border:0.5px solid rgba(212,168,67,.3);padding:2px 8px;border-radius:4px;white-space:nowrap;align-self:start;}
+
+</style>
+</head>
+<body>
+
+<!-- ══════════════ FIREBASE SETUP OVERLAY ══════════════ -->
+<div id="setupOverlay">
+  <div class="setup-box">
+    <h2>🔥 Firebase Setup</h2>
+    <p>One-time setup — after this everyone visiting the website sees all traders in real-time. You only need a Google Account.</p>
+
+    <div class="setup-step">
+      <h4>Step 1 — Create Firebase Project</h4>
+      <p>Go to <strong style="color:var(--text)">console.firebase.google.com</strong> → "Add project" → enter a name → Build → Firestore Database → <strong style="color:var(--text)">Start in test mode</strong></p>
+    </div>
+
+    <div class="setup-step">
+      <h4>Step 2 — Paste your Web App Config</h4>
+      <p>Firebase Dashboard: ⚙️ Project Settings → Your apps → Web (&lt;/&gt;) → Register app → copy the config values:</p>
+      <input class="setup-input" id="cfg-apiKey" placeholder="apiKey  e.g. AIzaSyXXXXXXXXXX" />
+      <input class="setup-input" id="cfg-authDomain" placeholder="authDomain  e.g. my-project.firebaseapp.com" />
+      <input class="setup-input" id="cfg-projectId" placeholder="projectId  e.g. my-project-abc12" />
+      <p class="setup-note">Only these 3 fields are needed. Ignore storageBucket, messagingSenderId, appId.</p>
+    </div>
+
+    <div class="setup-step">
+      <h4>Step 3 — Your Trader Name</h4>
+      <input class="setup-input" id="cfg-username" placeholder="Your name (e.g. Jason)" style="font-family:'Space Grotesk',sans-serif;" />
+    </div>
+
+    <button class="btn-gold-lg" onclick="initFirebase()">🚀 Verbinden & Starten</button>
+    <div id="setupError"></div>
+
+    <p style="margin-top:1rem;font-size:11px;color:var(--text3);">
+      All data lives in your own Firebase — Anthropic/Claude has no access. Test mode is open for 30 days, then set a simple Firestore rule (see Hosting page).
+    </p>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN APP ══════════════ -->
+<nav>
+  <div class="nav-logo"><span>⬛</span> SD Zones PRO <span style="color:var(--text3);font-weight:300;margin:0 4px;">—</span><span>Hub</span></div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('overview',this)">📊 Overview</button>
+    <button class="nav-tab" onclick="showPage('journal',this)">📝 Journal</button>
+    <button class="nav-tab" onclick="showPage('community',this)">👥 Community</button>
+    <button class="nav-tab" onclick="showPage('legend',this)">⚙️ Indicator Legend</button>
+    <button class="nav-tab" onclick="showPage('hosting',this)">🚀 Hosting</button>
+  </div>
+  <div class="nav-right">
+    <div class="sync-indicator"><span class="live-dot"></span> Live</div>
+    <div class="nav-user-badge" id="navUserBadge"></div>
+  </div>
+</nav>
+
+<!-- OVERVIEW -->
+<div id="page-overview" class="page active">
+  <div class="section-header">
+    <h1>30-Day Challenge <span style="color:var(--gold)">Overview</span></h1>
+    <p>08 May 2026 — 06 Jun 2026 &nbsp;·&nbsp; XAUUSD M5/M15 &nbsp;·&nbsp; Supply & Demand</p>
+  </div>
+  <div class="overview-grid">
+    <div class="stat-card"><div class="stat-val" id="ov-pips" style="color:var(--green)">0</div><div class="stat-lbl">Total Pips</div></div>
+    <div class="stat-card"><div class="stat-val" id="ov-wr">0%</div><div class="stat-lbl">Win Rate</div></div>
+    <div class="stat-card"><div class="stat-val" id="ov-trades">0</div><div class="stat-lbl">Trades</div></div>
+    <div class="stat-card"><div class="stat-val" id="ov-rr">—</div><div class="stat-lbl">Avg R:R</div></div>
+  </div>
+  <div class="charts-row">
+    <div class="card"><div class="card-title">Equity Curve — Cumulative Pips</div><div class="chart-wrap"><canvas id="equityChart"></canvas></div></div>
+    <div class="card"><div class="card-title">Win / Loss / BE</div><div class="chart-wrap"><canvas id="wlChart"></canvas></div></div>
+  </div>
+</div>
+
+<!-- JOURNAL -->
+<div id="page-journal" class="page">
+  <div class="section-header">
+    <h1>Trading <span style="color:var(--gold)">Journal</span></h1>
+    <p>Your trades — saved and synced live for all traders to see</p>
+  </div>
+  <div class="journal-toolbar">
+    <select class="day-select" id="daySelect" onchange="loadDay()"></select>
+    <button class="btn-sm btn-gold" onclick="saveTrades()">💾 Save &amp; Sync</button>
+    <button class="btn-sm" onclick="addTradeRow()">+ Trade</button>
+    <span class="save-status" id="saveStatus"></span>
+  </div>
+  <div class="trade-header">
+    <span>#</span><span>Pair</span><span>TF</span><span>Ranking</span><span>Direction</span><span>Pips</span><span>R:R</span><span>SL Hit</span><span>BE Set</span><span>Notes</span>
+  </div>
+  <div id="tradesList"></div>
+  <div class="daily-summary">
+    <div class="ds-item"><span class="ds-label">Trades</span><span class="ds-val" id="ds-trades">0</span></div>
+    <div class="ds-item"><span class="ds-label">Total Pips</span><span class="ds-val" id="ds-pips">0</span></div>
+    <div class="ds-item"><span class="ds-label">Win Rate</span><span class="ds-val" id="ds-wr">—</span></div>
+    <div class="ds-item"><span class="ds-label">Avg R:R</span><span class="ds-val" id="ds-rr">—</span></div>
+    <div style="flex:1;min-width:200px">
+      <div class="ds-label" style="margin-bottom:4px">Session Notes</div>
+      <textarea class="notes-input" id="sessionNotes" placeholder="Market conditions, mistakes, observations..."></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- COMMUNITY -->
+<div id="page-community" class="page">
+  <div class="section-header">
+    <h1>Community <span style="color:var(--gold)">Journal</span></h1>
+    <p>All traders in real-time — click any card for equity details</p>
+  </div>
+  <div id="tradersList" class="traders-grid"><div class="loading"><span class="spinner"></span> Loading traders...</div></div>
+  <div id="traderDetail"></div>
+</div>
+
+<!-- LEGEND -->
+<div id="page-legend" class="page">
+  <div class="section-header">
+    <h1>Indicator <span style="color:var(--gold)">Legend</span></h1>
+    <p>Every setting of SD Zones PRO — explained in English with purpose &amp; use case</p>
+  </div>
+
+  <!-- MY PERSONAL SETTINGS -->
+  <div class="my-settings-banner">
+    <div class="msb-header">
+      <span style="font-size:20px">⭐</span>
+      <h2>My Active Settings — Zone Detection</h2>
+      <span class="msb-badge">JASON'S CONFIG</span>
+    </div>
+    <div class="msb-grid">
+      <div class="msb-item">
+        <span class="msb-label">Swing Length</span>
+        <span class="msb-val">30</span>
+        <span class="msb-note">Higher than default (12) → fewer but much stronger zones. Only major institutional pivots qualify.</span>
+      </div>
+      <div class="msb-item">
+        <span class="msb-label">Max Active Zones</span>
+        <span class="msb-val">15</span>
+        <span class="msb-note">Default is 8. With 15 zones the full picture from Daily bias down to M5 is visible at once.</span>
+      </div>
+      <div class="msb-item">
+        <span class="msb-label">Max Zone Height (ATR)</span>
+        <span class="msb-val">0.5</span>
+        <span class="msb-note">Very tight ceiling vs default 3.0. Only razor-narrow, precise zones are accepted.</span>
+      </div>
+      <div class="msb-item">
+        <span class="msb-label">Min Zone Height (ATR)</span>
+        <span class="msb-val">0.1</span>
+        <span class="msb-note">Very low floor → detects even tiny sharp reaction zones. Combined with Max 0.5 = ultra-precise zones only.</span>
+      </div>
+      <div class="msb-item">
+        <span class="msb-label">Force Zone Min Height</span>
+        <span class="msb-val">0.3</span>
+        <span class="msb-note">Zones too narrow to trade get expanded to 0.3 ATR minimum — tight but enough room for SL placement.</span>
+      </div>
+      <div class="msb-item">
+        <span class="msb-label">Min Zone Distance</span>
+        <span class="msb-val">20</span>
+        <span class="msb-note">Zones must be 20+ bars apart. Prevents zone clusters from the same area — clean and actionable.</span>
+      </div>
+    </div>
+  </div>
+
+  <input class="legend-search" type="text" placeholder="Search settings..." oninput="filterLegend(this.value)" />
+  <div id="legendContainer"></div>
+</div>
+
+<!-- HOSTING -->
+<div id="page-hosting" class="page">
+  <div class="section-header">
+    <h1>Free <span style="color:var(--gold)">Hosting Guide</span></h1>
+    <p>100% free — no costs, no credit card, ever.</p>
+  </div>
+  <div class="platform-grid">
+    <div class="platform-card"><div class="platform-name">GitHub Pages</div><div class="platform-badge">RECOMMENDED</div><div class="platform-desc">Directly from your GitHub repo — free forever.</div></div>
+    <div class="platform-card"><div class="platform-name">Netlify</div><div class="platform-badge">DRAG & DROP</div><div class="platform-desc">Drop the file and it is live. No CLI needed.</div></div>
+    <div class="platform-card"><div class="platform-name">Vercel</div><div class="platform-badge">1-KLICK</div><div class="platform-desc">Connect GitHub → auto-deploy on every push.</div></div>
+  </div>
+  <div id="hostingSteps"></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════ FIREBASE ══════════════
+let db = null;
+let currentUser = '';
+let currentDay = 1;
+let localData = {};
+let equityChartInst = null, wlChartInst = null;
+let unsubscribeCommunity = null;
+
+const SAVED_CFG = (() => { try { return JSON.parse(localStorage.getItem('sdFirebaseCfg') || 'null'); } catch(e){ return null; } })();
+
+if (SAVED_CFG && SAVED_CFG.projectId && SAVED_CFG.username) {
+  document.getElementById('setupOverlay').style.display = 'none';
+  currentUser = SAVED_CFG.username;
+  bootFirebase(SAVED_CFG);
+}
+
+function initFirebase() {
+  const apiKey = document.getElementById('cfg-apiKey').value.trim();
+  const authDomain = document.getElementById('cfg-authDomain').value.trim();
+  const projectId = document.getElementById('cfg-projectId').value.trim();
+  const username = document.getElementById('cfg-username').value.trim();
+  const errEl = document.getElementById('setupError');
+  errEl.style.display = 'none';
+
+  if (!apiKey || !authDomain || !projectId || !username) {
+    errEl.textContent = '⚠️ Please fill in all fields.'; errEl.style.display = 'block'; return;
+  }
+  if (username.length < 2) {
+    errEl.textContent = '⚠️ Name must be at least 2 characters.'; errEl.style.display = 'block'; return;
+  }
+
+  const cfg = { apiKey, authDomain, projectId, username };
+  localStorage.setItem('sdFirebaseCfg', JSON.stringify(cfg));
+  currentUser = username;
+  bootFirebase(cfg);
+  document.getElementById('setupOverlay').style.display = 'none';
+  toast('🔥 Firebase connected! Welcome, ' + username);
+}
+
+function bootFirebase(cfg) {
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp({ apiKey: cfg.apiKey, authDomain: cfg.authDomain, projectId: cfg.projectId });
+    }
+    db = firebase.firestore();
+    document.getElementById('navUserBadge').textContent = '👤 ' + currentUser;
+    document.getElementById('navUserBadge').style.display = 'block';
+    initDaySelect();
+    loadDay();
+    renderLegend();
+    renderHosting();
+    updateOverview();
+  } catch(e) {
+    toast('❌ Firebase error: ' + e.message);
+    localStorage.removeItem('sdFirebaseCfg');
+    document.getElementById('setupOverlay').style.display = 'flex';
+  }
+}
+
+function logout() {
+  localStorage.removeItem('sdFirebaseCfg');
+  location.reload();
+}
+
+// ══════════════ NAVIGATION ══════════════
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+  if (id === 'overview') updateOverview();
+  if (id === 'community') loadCommunity();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ══════════════ DAYS ══════════════
+const startDate = new Date(2026, 4, 8);
+const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const DAYS = Array.from({length:30}, (_,i) => {
+  const d = new Date(startDate);
+  d.setDate(startDate.getDate() + i);
+  return {
+    n: i+1,
+    label: `Day ${i+1} — ${dayNames[d.getDay()]} ${d.getDate().toString().padStart(2,'0')}.${(d.getMonth()+1).toString().padStart(2,'0')}`,
+  };
+});
+
+function initDaySelect() {
+  const sel = document.getElementById('daySelect');
+  sel.innerHTML = DAYS.map(d => `<option value="${d.n}">${d.label}</option>`).join('');
+}
+
+function defaultTrades() {
+  return Array.from({length:8}, () => ({pair:'XAUUSD',tf:'M5',ranking:'',dir:'BUY',pips:'',rr:'',slHit:false,beSet:false,notes:''}));
+}
+
+// ══════════════ JOURNAL ══════════════
+async function loadDay() {
+  if (!db) return;
+  currentDay = parseInt(document.getElementById('daySelect').value);
+  setStatus('⏳ Loading...');
+  try {
+    const doc = await db.collection('journals').doc(currentUser).collection('days').doc('day' + currentDay).get();
+    const data = doc.exists ? doc.data() : { trades: defaultTrades(), notes: '' };
+    localData = data;
+    renderTrades(data.trades || defaultTrades());
+    document.getElementById('sessionNotes').value = data.notes || '';
+    updateDailySummary(data.trades || []);
+    setStatus('');
+  } catch(e) {
+    setStatus('❌ Load error');
+    renderTrades(defaultTrades());
+  }
+}
+
+function renderTrades(trades) {
+  const c = document.getElementById('tradesList');
+  c.innerHTML = '';
+  trades.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'trade-row';
+    const pCls = parseFloat(t.pips) > 0 ? 'pips-pos' : parseFloat(t.pips) < 0 ? 'pips-neg' : '';
+    row.innerHTML = `
+      <span class="trade-num">${i+1}</span>
+      <input type="text" value="${esc(t.pair||'XAUUSD')}" onchange="setField(${i},'pair',this.value)" />
+      <select onchange="setField(${i},'tf',this.value)">
+        ${['M1','M5','M15','M30','H1','H4','D'].map(tf=>`<option${t.tf===tf?' selected':''}>${tf}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="L1 / L2 / A++" value="${esc(t.ranking||'')}" onchange="setField(${i},'ranking',this.value)" />
+      <select onchange="setField(${i},'dir',this.value)">
+        <option${t.dir==='BUY'?' selected':''}>BUY</option>
+        <option${t.dir==='SELL'?' selected':''}>SELL</option>
+      </select>
+      <input type="number" placeholder="±Pips" class="${pCls}" value="${t.pips||''}" onchange="setField(${i},'pips',this.value);colorPips(this)" />
+      <input type="number" placeholder="R:R" step="0.1" value="${t.rr||''}" onchange="setField(${i},'rr',this.value)" />
+      <div class="checkbox-cell"><input type="checkbox" ${t.slHit?'checked':''} onchange="setField(${i},'slHit',this.checked)" title="SL Hit" /></div>
+      <div class="checkbox-cell"><input type="checkbox" ${t.beSet?'checked':''} onchange="setField(${i},'beSet',this.checked)" title="BE Set" /></div>
+      <input type="text" placeholder="Notizen..." value="${esc(t.notes||'')}" onchange="setField(${i},'notes',this.value)" />
+    `;
+    c.appendChild(row);
+  });
+}
+
+function esc(s) { return String(s).replace(/"/g,'&quot;'); }
+
+function colorPips(el) {
+  el.className = '';
+  const v = parseFloat(el.value);
+  if (v > 0) el.className = 'pips-pos';
+  else if (v < 0) el.className = 'pips-neg';
+}
+
+function setField(idx, field, val) {
+  if (!localData.trades) localData.trades = defaultTrades();
+  localData.trades[idx][field] = val;
+  updateDailySummary(localData.trades);
+}
+
+function addTradeRow() {
+  if (!localData.trades) localData.trades = defaultTrades();
+  localData.trades.push({pair:'XAUUSD',tf:'M5',ranking:'',dir:'BUY',pips:'',rr:'',slHit:false,beSet:false,notes:''});
+  renderTrades(localData.trades);
+}
+
+async function saveTrades() {
+  if (!db) return toast('⚠️ Firebase not connected');
+  setStatus('💾 Save &amp; Sync...');
+  localData.notes = document.getElementById('sessionNotes').value;
+  localData.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+  localData.username = currentUser;
+  try {
+    await db.collection('journals').doc(currentUser).collection('days').doc('day' + currentDay).set(localData);
+    // Update summary doc for community view
+    const stats = calcStats({ ['day'+currentDay]: localData });
+    const allStats = await getAllMyStats();
+    await db.collection('traders').doc(currentUser).set({
+      username: currentUser,
+      stats: allStats,
+      lastDay: currentDay,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    setStatus('✅ Saved');
+    setTimeout(() => setStatus(''), 2000);
+    updateOverview();
+    toast('✅ Saved & synced live');
+  } catch(e) {
+    setStatus('❌ Fehler: ' + e.message);
+  }
+}
+
+async function getAllMyStats() {
+  try {
+    const snap = await db.collection('journals').doc(currentUser).collection('days').get();
+    const data = {};
+    snap.forEach(doc => { data[doc.id] = doc.data(); });
+    return calcStats(data);
+  } catch(e) { return { pips:0, trades:0, wins:0, wr:0, avgRR:'—' }; }
+}
+
+function setStatus(msg) { document.getElementById('saveStatus').textContent = msg; }
+
+function updateDailySummary(trades) {
+  const filled = (trades||[]).filter(t => t.pips !== '' && t.pips !== null && t.pips !== undefined && t.pair);
+  const totalPips = filled.reduce((s,t) => s + (parseFloat(t.pips)||0), 0);
+  const wins = filled.filter(t => parseFloat(t.pips) > 0).length;
+  const rrVals = filled.filter(t => t.rr).map(t => parseFloat(t.rr));
+  const avgRR = rrVals.length ? (rrVals.reduce((s,v)=>s+v,0)/rrVals.length).toFixed(1) : '—';
+  const wr = filled.length ? Math.round(wins/filled.length*100)+'%' : '—';
+  document.getElementById('ds-trades').textContent = filled.length;
+  const pe = document.getElementById('ds-pips');
+  pe.textContent = (totalPips >= 0 ? '+' : '') + totalPips.toFixed(1);
+  pe.style.color = totalPips >= 0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('ds-wr').textContent = wr;
+  document.getElementById('ds-rr').textContent = avgRR;
+}
+
+// ══════════════ OVERVIEW ══════════════
+async function updateOverview() {
+  if (!db) return;
+  try {
+    const snap = await db.collection('journals').doc(currentUser).collection('days').get();
+    const data = {};
+    snap.forEach(doc => { data[doc.id] = doc.data(); });
+    const stats = calcStats(data);
+    const pe = document.getElementById('ov-pips');
+    pe.textContent = (stats.pips >= 0 ? '+' : '') + stats.pips.toFixed(1);
+    pe.style.color = stats.pips >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('ov-wr').textContent = stats.wr + '%';
+    document.getElementById('ov-trades').textContent = stats.trades;
+    document.getElementById('ov-rr').textContent = stats.avgRR;
+    buildCharts(data);
+  } catch(e) { /* silently fail */ }
+}
+
+function calcStats(data) {
+  let pips = 0, trades = 0, wins = 0, losses = 0, rrSum = 0, rrCount = 0;
+  Object.values(data).forEach(day => {
+    if (!day || !day.trades) return;
+    day.trades.forEach(t => {
+      if (t.pips !== '' && t.pips !== null && t.pips !== undefined && t.pair) {
+        trades++;
+        const p = parseFloat(t.pips)||0;
+        pips += p;
+        if (p > 0) wins++;
+        else if (p < 0) losses++;
+        if (t.rr) { rrSum += parseFloat(t.rr)||0; rrCount++; }
+      }
+    });
+  });
+  return {
+    pips: parseFloat(pips.toFixed(1)),
+    trades, wins, losses,
+    wr: trades ? Math.round(wins/trades*100) : 0,
+    avgRR: rrCount ? (rrSum/rrCount).toFixed(1) : '—'
+  };
+}
+
+function buildCharts(data) {
+  let cumPips = 0;
+  const equityPoints = [0];
+  const labels = ['Start'];
+  DAYS.forEach(d => {
+    const day = data['day'+d.n];
+    if (day && day.trades) {
+      day.trades.forEach(t => {
+        if (t.pips !== '' && t.pips !== null && t.pair) cumPips += parseFloat(t.pips)||0;
+      });
+    }
+    equityPoints.push(parseFloat(cumPips.toFixed(1)));
+    labels.push('D'+d.n);
+  });
+
+  const stats = calcStats(data);
+  const chartOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#555b63', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+      y: { ticks: { color: '#555b63', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } }
+    }
+  };
+
+  if (equityChartInst) equityChartInst.destroy();
+  equityChartInst = new Chart(document.getElementById('equityChart'), {
+    type: 'line',
+    data: { labels, datasets: [{ data: equityPoints, borderColor: '#d4a843', backgroundColor: 'rgba(212,168,67,0.07)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#d4a843' }] },
+    options: chartOpts
+  });
+
+  if (wlChartInst) wlChartInst.destroy();
+  wlChartInst = new Chart(document.getElementById('wlChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Win','Loss','BE/Offen'],
+      datasets: [{ data: [stats.wins, stats.losses, Math.max(0, stats.trades-stats.wins-stats.losses)], backgroundColor: ['rgba(45,212,160,0.8)','rgba(240,80,112,0.8)','rgba(139,144,152,0.4)'], borderWidth: 0 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8b9098', font: { size: 11 }, boxWidth: 12 } } } }
+  });
+}
+
+// ══════════════ COMMUNITY ══════════════
+function loadCommunity() {
+  if (!db) return;
+  const container = document.getElementById('tradersList');
+  container.innerHTML = '<div class="loading"><span class="spinner"></span> Loading traders...</div>';
+  document.getElementById('traderDetail').innerHTML = '';
+
+  if (unsubscribeCommunity) unsubscribeCommunity();
+  unsubscribeCommunity = db.collection('traders').onSnapshot(snap => {
+    if (snap.empty) {
+      container.innerHTML = '<div class="empty-state">No traders yet. Save your first trade to appear here!</div>';
+      return;
+    }
+    container.innerHTML = '';
+    snap.forEach(doc => {
+      const t = doc.data();
+      if (!t.username) return;
+      const s = t.stats || {};
+      const card = document.createElement('div');
+      card.className = 'trader-card' + (t.username === currentUser ? ' mine' : '');
+      const updStr = t.updatedAt ? new Date(t.updatedAt.seconds*1000).toLocaleDateString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      const pipColor = (s.pips||0) >= 0 ? 'var(--green)' : 'var(--red)';
+      card.innerHTML = `
+        <div class="trader-name">${t.username} ${t.username===currentUser?'<span class="trader-badge">YOU</span>':''}</div>
+        <div class="trader-stats">
+          <div class="ts-item"><div class="ts-val" style="color:${pipColor}">${(s.pips||0)>=0?'+':''}${(s.pips||0).toFixed(0)}</div><div class="ts-lbl">Pips</div></div>
+          <div class="ts-item"><div class="ts-val">${s.wr||0}%</div><div class="ts-lbl">Win Rate</div></div>
+          <div class="ts-item"><div class="ts-val">${s.trades||0}</div><div class="ts-lbl">Trades</div></div>
+        </div>
+        <div class="last-updated">Zuletzt: ${updStr}</div>
+      `;
+      card.onclick = () => showTraderEquity(t.username);
+      container.appendChild(card);
+    });
+  }, err => {
+    container.innerHTML = '<div class="empty-state">❌ Fehler: ' + err.message + '</div>';
+  });
+}
+
+async function showTraderEquity(username) {
+  const det = document.getElementById('traderDetail');
+  det.innerHTML = '<div class="loading"><span class="spinner"></span> Loading equity curve...</div>';
+  try {
+    const snap = await db.collection('journals').doc(username).collection('days').get();
+    const data = {};
+    snap.forEach(doc => { data[doc.id] = doc.data(); });
+
+    let cumPips = 0;
+    const equityPoints = [0];
+    const labels = ['Start'];
+    DAYS.forEach(d => {
+      const day = data['day'+d.n];
+      if (day && day.trades) {
+        day.trades.forEach(t => { if (t.pips !== '' && t.pips !== null && t.pair) cumPips += parseFloat(t.pips)||0; });
+      }
+      equityPoints.push(parseFloat(cumPips.toFixed(1)));
+      labels.push('D'+d.n);
+    });
+
+    det.innerHTML = `
+      <div class="card" style="margin-top:0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+          <div style="font-size:16px;font-weight:600">${username} — Equity Kurve</div>
+          <button class="btn-sm" onclick="document.getElementById('traderDetail').innerHTML=''">✕ Schließen</button>
+        </div>
+        <div class="chart-wrap"><canvas id="traderEqChart"></canvas></div>
+      </div>
+    `;
+    setTimeout(() => {
+      new Chart(document.getElementById('traderEqChart'), {
+        type: 'line',
+        data: { labels, datasets: [{ data: equityPoints, borderColor: '#d4a843', backgroundColor: 'rgba(212,168,67,0.08)', fill: true, tension: 0.4, pointRadius: 2, pointBackgroundColor: '#d4a843' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { color:'#555b63',font:{size:10} }, grid:{color:'rgba(255,255,255,0.04)'} }, y: { ticks:{color:'#555b63',font:{size:10}}, grid:{color:'rgba(255,255,255,0.04)'} } } }
+      });
+    }, 50);
+  } catch(e) {
+    det.innerHTML = '<div class="empty-state">❌ ' + e.message + '</div>';
+  }
+}
+
+// ══════════════ LEGEND ══════════════
+
+const MY_ZONE_SETTINGS = {
+  'Swing Length (Sensitivity)': '30',
+  'Max Active Zones per Side': '15',
+  'Max Zone Height (ATR Multiplier)': '0.5',
+  'Min Zone Height (ATR Multiplier)': '0.1',
+  'Force Zone Min Height (ATR)': '0.3',
+  'Min Distance Between Zones (bars)': '20',
+};
+
+const LEGEND_DATA = [
+  { group:'Display Mode', icon:'🖥️', items:[
+    { name:'Display Mode', default:'Standard', type:'select', options:['Clean','Standard','Analyse'], desc:'Controls how much information is displayed. <b>Clean</b> = zones + entry only (great for minimal charts). <b>Standard</b> = + score &amp; retest markers. <b>Analyse</b> = full breakdown with probability and checklist. Recommended for active trading: Standard.' },
+    { name:'Focus Mode', default:'false', type:'toggle', desc:'Shows only the 2 nearest zones (1× Supply, 1× Demand) highlighted — all others are dimmed but not deleted. Perfect when you want a clean decision without distraction from other zones.' },
+  ]},
+  { group:'Manual Toggles', icon:'🔧', items:[
+    { name:'Show BOS', default:'false', type:'toggle', desc:'Break of Structure — marks when price breaks a previous significant high/low, confirming trend direction. Use on M15/H1 to confirm bias before dropping to M5 for entry.' },
+    { name:'Show CHoCH', default:'false', type:'toggle', desc:'Change of Character — signals a potential trend reversal when the existing market structure breaks for the first time. Early signal for reversal setups. CHoCH at a S&D zone = A++ setup.' },
+    { name:'Show Market Structure (HH/HL/LH/LL)', default:'false', type:'toggle', desc:'Labels Higher Highs, Higher Lows, Lower Highs, Lower Lows directly on chart. Visually shows the current trend — essential for top-down analysis (Daily → H1 → M15).' },
+    { name:'Show Liquidity Pools', default:'false', type:'toggle', desc:'Marks areas where large stop-loss clusters sit (Equal Highs/Lows, old extremes). Institutions hunt these pools — after the sweep, price often reverses back into the zone.' },
+    { name:'Show RSI Label', default:'false', type:'toggle', desc:'Displays the current RSI value as an on-chart label. See overbought (>70) / oversold (<30) conditions in zone context without opening a separate RSI panel.' },
+    { name:'Show Rejection Candles', default:'true', type:'toggle', desc:'Marks candles with large wicks (wick/body ratio above threshold). A rejection candle at a zone is strong confirmation for entry. If it closes back inside the zone — even stronger signal.' },
+    { name:'Highlight High Volume Bars', default:'true', type:'toggle', desc:'Highlights candles with above-average volume. High volume = institutional activity. A high-volume candle inside a Demand zone means aggressive buying — strong confirmation.' },
+  ]},
+  { group:'Visual Extensions', icon:'✨', items:[
+    { name:'Show Factor Markers (FVG/OB/POC/LIQ)', default:'true', type:'toggle', desc:'Small icons on the right edge of each zone show detected confluence factors: FVG = Fair Value Gap, OB = Order Block, POC = Point of Control (volume center), LIQ = Liquidity cluster. More icons = stronger zone.' },
+    { name:'Show Equal Highs / Equal Lows', default:'true', type:'toggle', desc:'Marks price levels the market touched exactly twice. These stop clusters are magnets for institutional liquidity hunts. Zone + Equal High/Low alignment = very high reaction probability.' },
+    { name:'Show Score Interpretation', default:'true', type:'toggle', desc:'Displays "weak / medium / strong" next to the numeric score (0–10). Instant visual assessment without reading the number. weak = &lt;4, medium = 4–7, strong = ≥7.' },
+    { name:'Show Entry as Hypothesis', default:'true', type:'toggle', desc:'Replaces "ENTRY 1.2345" with "Likely reaction area here". Important psychological reminder — this is a hypothesis, not a guarantee. Prevents over-commitment on any single trade.' },
+  ]},
+  { group:'Zone Detection', icon:'📍', items:[
+    { name:'Swing Length (Sensitivity)', default:'12', type:'number', desc:'How many bars left and right of a pivot are checked. Smaller (e.g. 8) = more, smaller zones for scalping. Larger (e.g. 30) = fewer but very significant, major institutional zones. For XAUUSD M5/M15: 10–14 default, 30 for high-quality zones only.' },
+    { name:'Max Active Zones per Side', default:'8', type:'number', desc:'Maximum simultaneously visible Supply and Demand zones per side. Too many = overtrading and decision paralysis. 6–8 is the clean default; use 15 when you want the full picture across multiple timeframes.' },
+    { name:'Max Zone Height (ATR Multiplier)', default:'3.0', type:'number', desc:'Zones wider than X × ATR are rejected. Filters out imprecise, wide zones with no clear entry. Very tight (0.5) = only needle-sharp zones qualify. Default 3.0 is much more permissive.' },
+    { name:'Min Zone Height (ATR Multiplier)', default:'0.3', type:'number', desc:'Zones narrower than X × ATR are rejected. Prevents microscopic zones with no room for SL placement. 0.1 allows very tight zones — combined with Max 0.5 creates a razor-thin zone filter.' },
+    { name:'Force Zone Min Height (ATR)', default:'0.5', type:'number', desc:'If a zone falls below minimum height it gets expanded to this value. 0.3 = tight but still tradeable. Ensures consistent, actionable zone height even during compressed consolidations.' },
+    { name:'Min Distance Between Zones (bars)', default:'10', type:'number', desc:'Prevents two zones from the same price area both appearing. Higher values (like 20) keep the chart clean by filtering zone clusters. Significantly reduces signal noise and duplicate entries.' },
+  ]},
+  { group:'Zone Settings', icon:'⚙️', items:[
+    { name:'Zone Invalidation', default:'Close', type:'select', options:['Close','Wick'], desc:'When is a zone considered broken? Close = price must close through the zone. Wick = a wick alone is enough. Close is more conservative and prevents false invalidation from brief spikes.' },
+    { name:'Close Invalidation Min Bars', default:'2', type:'number', desc:'For Close method: price must close outside the zone for N consecutive bars before invalidated. Prevents a single doji or spike from killing a valid zone.' },
+    { name:'Show Historic (Broken) Zones', default:'true', type:'toggle', desc:'Shows already-broken zones as grey crossed-out boxes. Critical: old Demand zones can become Supply after a break (Role Reversal) — a core S&D principle. Never disable for analysis.' },
+    { name:'Show Strike-Through on Historic Zones', default:'true', type:'toggle', desc:'Draws a line through broken zones for instant visual distinction from active zones. No need to compare colors — broken vs. active is immediately obvious.' },
+    { name:'Active Zones Lookback (bars)', default:'500', type:'number', desc:'How many bars back the indicator searches for still-active (unbroken) zones. 300–500 is sufficient for intraday M5 trading. More = more historical context but more computation.' },
+    { name:'Historic Zones Lookback (bars)', default:'300', type:'number', desc:'How far back broken zones are displayed. Increase to 500–1000 on H1 for Role Reversal analysis. Keep lower for cleaner intraday charts.' },
+  ]},
+  { group:'Volume Profile', icon:'📊', items:[
+    { name:'Show Volume Profile in Zones', default:'true', type:'toggle', desc:'Displays a horizontal mini Volume Profile inside each zone. Shows where the most transactions occurred — the tallest bar (POC) is the strongest price level in the zone. Ideal for limit order placement.' },
+    { name:'Volume Profile Grids per Zone', default:'8', type:'number', desc:'Number of horizontal buckets in the volume profile. More buckets = more precise POC but higher computation. 8 is the right balance for M5/M15.' },
+    { name:'VP Lower Timeframe', default:'Auto', type:'select', options:['Auto','1','5','15','30'], desc:'Which timeframe is used for raw volume data inside zones. Auto selects based on current chart TF. Override manually if Auto gives wrong granularity.' },
+  ]},
+  { group:'Multi-Timeframe (MTF)', icon:'📐', items:[
+    { name:'Enable MTF Confluence', default:'true', type:'toggle', desc:'When an HTF zone (e.g. H1) aligns with an LTF zone (e.g. M15), the LTF zone receives a confluence score bonus (+1.5 points). Critical for A++ setup identification — never disable this.' },
+    { name:'HTF Timeframe', default:'60', type:'select', options:['3','5','10','15','30','60','240','D'], desc:'Which Higher Timeframe to analyse for MTF confluence. Trading on M15 → use H1 (60). Trading on M5 → use H1 (60) or H4 (240). Rule: always at least 4× your entry timeframe.' },
+    { name:'HTF Swing Length', default:'10', type:'number', desc:'Pivot sensitivity for HTF zone detection — independent from the LTF value. For H1/H4: 8–12. For Daily: 10–15.' },
+  ]},
+  { group:'Precision Entry', icon:'🎯', items:[
+    { name:'Show Precision Entry Box', default:'true', type:'toggle', desc:'Shows a precise entry box inside the zone — calculated from FVG, Order Block, POC and Liquidity cluster. This is the optimal area for a limit order. Never enter across the whole zone — only the box.' },
+    { name:'FVG/OB/Liq Lookback (bars)', default:'150', type:'number', desc:'How far back the indicator searches for precision entry factors. Too small = important factors missed. Too large = old, irrelevant factors distort the box position.' },
+    { name:'Entry Box Thickness (% Zone)', default:'0.18', type:'number', desc:'Height of the entry box as a percentage of total zone height. 0.18 = 18% of the zone. Narrower = more precise but tighter SL. Wider = more room but less precision.' },
+    { name:'Adaptive Box Width', default:'true', type:'toggle', desc:'When active: entry box adapts to how tightly the confluence factors are clustered. Factors close together = narrow box. Factors spread = wider box. Automatic quality optimization.' },
+    { name:'POC Volume Threshold', default:'1.5', type:'number', desc:'POC only counts for the entry box if its bucket has at least X× the average bucket volume. Prevents weak, random POCs from incorrectly positioning the box.' },
+    { name:'FVG Min Volume (x MA)', default:'1.2', type:'number', desc:'Fair Value Gap only qualifies if the gap candle had at least X× volume moving average. Volume confirmation filters out weak FVGs without institutional participation.' },
+    { name:'OB Min Impulse Body (x ATR)', default:'0.5', type:'number', desc:'Order Block only qualifies if the following impulse candle body is > ATR × factor. Weak impulse = no real institutional Order Block. 0.5 filters all powerless breakouts.' },
+  ]},
+  { group:'Market Structure', icon:'📈', items:[
+    { name:'BOS Lookback (bars)', default:'20', type:'number', desc:'How many bars back BOS/CHoCH detection checks. For M15: 20 is standard. Higher = only very significant breaks reported. Lower = more sensitive, more signals.' },
+  ]},
+  { group:'RSI', icon:'📉', items:[
+    { name:'RSI Length', default:'14', type:'number', desc:'Period for RSI calculation. Standard 14. Used as a secondary context factor — not a primary signal. RSI confirmation (OS/OB state) adds a small score boost to the zone.' },
+    { name:'RSI Overbought', default:'70', type:'number', desc:'Value above which RSI is considered overbought. Supply zones with RSI > 70 have higher reaction probability (momentum confirmation from above).' },
+    { name:'RSI Oversold', default:'30', type:'number', desc:'Value below which RSI is considered oversold. Demand zones with RSI < 30 have higher reaction probability. Classic divergence setup.' },
+  ]},
+  { group:'Alerts', icon:'🔔', items:[
+    { name:'Enable Alerts', default:'true', type:'toggle', desc:'Activates all TradingView alerts for the indicator. Alert types: price enters zone, price approaches zone, zone is invalidated. Essential if you are not watching the chart continuously.' },
+    { name:'Approaching Zone Distance (pips)', default:'20', type:'number', desc:'Alert fires when price comes within N pips of a zone. For XAUUSD: 20–30 pips. Gives you time to prepare, check the HTF bias, and identify the entry box before price arrives.' },
+  ]},
+  { group:'Rejection Candles', icon:'🕯️', items:[
+    { name:'Min Wick/Body Ratio', default:'2.0', type:'number', desc:'Minimum ratio of wick length to candle body for a rejection candle. 2.0 = wick is at least twice the body. Higher = stronger and rarer signals. 2.0–3.0 is ideal for Gold.' },
+  ]},
+  { group:'Liquidity', icon:'💧', items:[
+    { name:'Liquidity Line Length (bars)', default:'30', type:'number', desc:'How far right the liquidity pool lines are drawn. Visual only — does not affect detection logic.' },
+    { name:'Equal H/L Tolerance (ATR)', default:'0.15', type:'number', desc:'How close two pivots must be to qualify as Equal High/Low (in ATR units). 0.15 = pivots within 15% of one ATR are considered equal. Increase for less strict detection.' },
+  ]},
+  { group:'Analysis Panel', icon:'🖥️', items:[
+    { name:'Show Analysis Panel', default:'true', type:'toggle', desc:'Shows an on-chart dashboard with trend bias, session info, zone count and context. Quick situational overview without opening other indicators.' },
+    { name:'HTF Trend EMA Length', default:'20', type:'number', desc:'EMA length for trend determination in the Analysis Panel. Price above EMA = Bullish bias (prefer Demand zones). Price below EMA = Bearish bias (prefer Supply zones). 20 is standard.' },
+  ]},
+];
+
+function renderLegend(filter) {
+  const c = document.getElementById('legendContainer');
+  c.innerHTML = '';
+  const f = (filter||'').toLowerCase();
+  LEGEND_DATA.forEach(group => {
+    const items = group.items.filter(item => !f || item.name.toLowerCase().includes(f) || item.desc.toLowerCase().includes(f));
+    if (!items.length) return;
+    const g = document.createElement('div');
+    g.className = 'legend-group';
+    g.innerHTML = `<div class="legend-group-title"><span>${group.icon}</span> ${group.group}</div>`;
+    const list = document.createElement('div');
+    list.className = 'legend-items';
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'legend-item' + (item.type==='toggle' ? ' has-toggle' : '');
+      const checked = item.default === 'true';
+      const isMine = MY_ZONE_SETTINGS[item.name];
+      let rightEl;
+      if (item.type==='toggle') {
+        rightEl = `<label class="toggle-switch"><input type="checkbox" ${checked?'checked':''}><span class="toggle-slider"></span></label>`;
+      } else if (isMine) {
+        rightEl = `<span class="li-mine">⭐ Mine: ${isMine}</span>`;
+      } else {
+        rightEl = `<span class="li-default">Default: ${item.default}</span>`;
+      }
+      row.innerHTML = `
+        <div>
+          <div class="li-name">${item.name}${isMine&&item.type!=='toggle' ? ' <span style="color:var(--gold);font-size:11px;">⭐</span>' : ''}</div>
+          <div class="li-desc">${item.desc}</div>
+          ${item.type==='select' ? `<div class="li-options">Options: ${item.options.join(' · ')}</div>` : ''}
+        </div>
+        ${rightEl}
+      `;
+      list.appendChild(row);
+    });
+    g.appendChild(list);
+    c.appendChild(g);
+  });
+}
+
+function filterLegend(val) { renderLegend(val); }
+
+// ══════════════ HOSTING GUIDE ══════════════
+function renderHosting() {
+  const steps = [
+    { n:1, title:'Create a GitHub Account', body:'Go to <strong style="color:var(--text)">github.com</strong> → sign up for free. No paid plan needed — the Free plan covers everything.', code:null },
+    { n:2, title:'Create a New Repository', body:'Klicke auf "+" → "New repository" → Name: <code>trading-hub</code> → Stelle auf <strong style="color:var(--text)">Public</strong> → "Create repository"', code:null },
+    { n:3, title:'Upload This HTML File', body:'Click "uploading an existing file" → drag the file in → <strong style="color:var(--text)">Rename it to index.html</strong> (important!) → "Commit changes"', code:null },
+    { n:4, title:'Enable GitHub Pages', body:'Repository → <strong style="color:var(--text)">Settings</strong> → sidebar: <strong style="color:var(--text)">Pages</strong> → Source: "Deploy from a branch" → Branch: main → Folder: / (root) → <strong style="color:var(--text)">Save</strong>', code:null },
+    { n:5, title:'🎉 Your URL is Live', body:'After 1–2 minutes your site is reachable at:', code:'https://YOUR-USERNAME.github.io/trading-hub/' },
+    { n:6, title:'Firebase Firestore Rules (after 30 days)', body:'After 30 days test mode expires. Go to Firebase Console → Firestore → Rules and paste this rule:', code:`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read: if true;\n      allow write: if request.auth == null || true;\n    }\n  }\n}` },
+    { n:7, title:'Alternative: Netlify (no GitHub needed)', body:'Go to <strong style="color:var(--text)">app.netlify.com/drop</strong> → drag the index.html onto the deploy area → instantly live. Takes under 30 seconds.', code:'https://app.netlify.com/drop' },
+  ];
+
+  document.getElementById('hostingSteps').innerHTML = steps.map(s => `
+    <div class="h-step">
+      <div class="h-step-num">${s.n}</div>
+      <div class="h-step-body">
+        <h3>${s.title}</h3>
+        <p>${s.body}</p>
+        ${s.code ? `<div class="code-block"><span class="cmd">${s.code}</span></div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>
