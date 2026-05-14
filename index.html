@@ -4439,7 +4439,7 @@ function nav(id) {
   if (id === 'feed')        { renderFeed(); }
   if (id === 'inbox')       { renderInbox(); }
   if (id === 'settings')    { loadSettings(); applySettings(); loadPrivacySettings(); renderFriendRequests(); renderFriendsList(); renderBlockedUsers(); }
-  if (id === 'indicator')   { renderIndicatorSettings(); }
+  if (id === 'indicator')   { initSdZonesPage(); }
 
   // Mobile bottom nav active state
   document.querySelectorAll('.mbn-item').forEach(b => b.classList.remove('active'));
