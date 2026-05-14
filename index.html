@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -3548,12 +3549,149 @@ function _authAction(type) {
   </div>
 
   <!-- ══════ SD ZONES INDICATOR ══════ -->
+<!-- ══════ SD ZONES INDICATOR ══════ -->
   <div class="page" id="page-indicator">
-    <div class="ph">
-      <div class="ph-eyebrow">Dedicated Section</div>
-      <h1>SD Zones <span style="color:var(--gold)">PRO</span></h1>
-      <p>Indicator documentation, settings guide, and personal configuration</p>
+
+    <!-- TOOLBAR -->
+    <div class="chart-toolbar">
+      <select class="tb-select" id="symbolSelect" onchange="onSymbolChange()">
+        <option value="XAUUSD">XAUUSD — Gold</option>
+        <option value="EURUSD">EURUSD — Forex</option>
+        <option value="GBPUSD">GBPUSD — Forex</option>
+        <option value="NAS100">NAS100 — Index</option>
+        <option value="US100">US100 — NDX</option>
+        <option value="BTCUSD">BTCUSD — Crypto</option>
+        <option value="ETHUSDT">ETHUSDT — Crypto</option>
+      </select>
+      <div class="tb-divider"></div>
+      <select class="tb-select" id="tfSelect" onchange="onTFChange()">
+        <option value="5">M5</option>
+        <option value="15" selected>M15</option>
+        <option value="30">M30</option>
+        <option value="60">H1</option>
+        <option value="240">H4</option>
+        <option value="1440">D1</option>
+      </select>
+      <div class="tb-divider"></div>
+      <button class="tb-btn" id="focusBtn" onclick="toggleFocusMode()">🎯 Focus Mode</button>
+      <button class="tb-btn" id="histBtn" onclick="toggleHistoric()" title="Show/Hide historic zones">📜 Historic</button>
+      <button class="tb-btn" onclick="togglePanel()" id="chartPanelBtn" title="Toggle Analysis Panel">◧</button>
+      <button class="tb-btn" onclick="openSettings()" title="Settings">⚙</button>
+      <div class="tb-divider"></div>
+      <span id="priceDisplay" style="font-family:var(--font-mono);font-size:13px;color:var(--gold);font-weight:600;min-width:90px">—</span>
+      <div class="live-badge" id="liveBadge"><div class="live-dot"></div> LIVE</div>
     </div>
+
+    <!-- CHART + PANEL -->
+    <div class="sdz-layout">
+      <div class="chart-wrapper" id="chartWrapper">
+        <div id="chart-container"></div>
+        <div class="panel-toggle-btn" onclick="togglePanel()" title="Toggle Analysis Panel" id="panelToggleInner">›</div>
+        <div class="crosshair-info" id="crosshairInfo"></div>
+        <div class="loading-overlay" id="loadingOverlay">
+          <div class="loading-spinner"></div>
+          <div class="loading-text" id="loadingText">LOADING CHART DATA…</div>
+        </div>
+        <div class="error-state" id="errorState" style="display:none">
+          <div class="error-icon">⚠</div>
+          <div style="font-family:var(--font-display);font-size:16px;font-weight:700">Data Error</div>
+          <div class="error-msg" id="errorMsg">Could not fetch chart data.</div>
+          <button class="retry-btn" onclick="retryLoad()">↺ Retry</button>
+        </div>
+        <div class="locked-overlay" id="lockedOverlay" style="display:none">
+          <div class="locked-icon">🔒</div>
+          <div class="locked-title">Zones Locked</div>
+          <div class="locked-sub" id="lockedMsg">Please log in to see Supply & Demand zones.</div>
+          <button class="locked-btn" onclick="nav('overview')">Go to Dashboard</button>
+        </div>
+      </div>
+
+      <div class="analysis-panel" id="analysisPanel">
+        <div class="panel-section">
+          <div class="panel-section-title">📡 HTF Trend</div>
+          <div class="panel-row"><div class="panel-label">H1 Trend</div><div class="panel-value" id="htfH1">—</div></div>
+          <div class="panel-row"><div class="panel-label">H4 Trend</div><div class="panel-value" id="htfH4">—</div></div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-section-title">📌 Nearest Zone</div>
+          <div id="currentZonePanel"><div style="color:var(--ink3);font-size:12px">Calculating zones…</div></div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-section-title">🎯 Next Zones</div>
+          <div id="nextZonesPanel"><div style="color:var(--ink3);font-size:12px">—</div></div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-section-title">⚡ Setup Quality</div>
+          <div id="setupQualityPanel"><div style="color:var(--ink3);font-size:12px">—</div></div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-section-title">🌐 Market</div>
+          <div class="panel-row"><div class="panel-label">Session</div><div class="panel-value" id="sessionLabel">—</div></div>
+          <div class="panel-row"><div class="panel-label">RSI (14)</div><div class="panel-value" id="rsiLabel">—</div></div>
+          <div class="panel-row"><div class="panel-label">Volume</div><div class="panel-value" id="volLabel">—</div></div>
+        </div>
+        <div class="panel-section">
+          <div class="panel-section-title">🎯 Precision Entry</div>
+          <div id="precisionEntryPanel"><div style="color:var(--ink3);font-size:12px">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOLTIP & SETTINGS (fixed-position, DOM location doesn't matter) -->
+    <div class="zone-tooltip" id="zoneTooltip">
+      <div class="zt-title" id="ztTitle">Supply Zone</div>
+      <div class="zt-row"><span class="zt-label">Score</span><span class="zt-val" id="ztScore">—</span></div>
+      <div class="zt-row"><span class="zt-label">Probability</span><span class="zt-val" id="ztProb">—</span></div>
+      <div class="zt-row"><span class="zt-label">Session</span><span class="zt-val" id="ztSession">—</span></div>
+      <div class="zt-row"><span class="zt-label">Retests</span><span class="zt-val" id="ztRetests">—</span></div>
+      <div class="zt-row"><span class="zt-label">HTF Level</span><span class="zt-val" id="ztHTF">—</span></div>
+      <div class="zt-row"><span class="zt-label">Age (bars)</span><span class="zt-val" id="ztAge">—</span></div>
+    </div>
+    <div class="settings-backdrop" id="settingsBackdrop" onclick="closeSettings()"></div>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-panel-header">
+        <div class="settings-panel-title">⚙ SD Zones Settings</div>
+        <button onclick="closeSettings()" style="background:var(--elevated);border:0.5px solid var(--rim);color:var(--ink2);width:28px;height:28px;border-radius:var(--r-sm);cursor:pointer;font-size:13px">✕</button>
+      </div>
+      <div class="settings-panel-body">
+        <div class="setting-group">
+          <div class="setting-group-title">Detection</div>
+          <div class="setting-row"><span class="setting-label">Swing Length</span><input class="setting-input" id="s_swingLen" type="number" value="12"></div>
+          <div class="setting-row"><span class="setting-label">Max Active Zones</span><input class="setting-input" id="s_maxZones" type="number" value="8"></div>
+          <div class="setting-row"><span class="setting-label">Max Zone H (ATR)</span><input class="setting-input" id="s_maxZoneH" type="number" step="0.1" value="3.0"></div>
+          <div class="setting-row"><span class="setting-label">Min Zone H (ATR)</span><input class="setting-input" id="s_minZoneH" type="number" step="0.1" value="0.3"></div>
+          <div class="setting-row"><span class="setting-label">Force Zone H (ATR)</span><input class="setting-input" id="s_forceZoneH" type="number" step="0.1" value="0.5"></div>
+          <div class="setting-row"><span class="setting-label">Min Zone Distance</span><input class="setting-input" id="s_minZoneDist" type="number" value="10"></div>
+          <div class="setting-row"><span class="setting-label">Invalidation Bars</span><input class="setting-input" id="s_closeInvalid" type="number" value="2"></div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">Volume Profile</div>
+          <div class="setting-row"><span class="setting-label">VP Grid Buckets</span><input class="setting-input" id="s_vpGrids" type="number" value="8"></div>
+          <div class="setting-row"><span class="setting-label">Vol Multiplier</span><input class="setting-input" id="s_volMult" type="number" step="0.1" value="1.5"></div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">HTF Confluence</div>
+          <div class="setting-row"><span class="setting-label">HTF Timeframe (min)</span><input class="setting-input" id="s_htfTF" type="number" value="60"></div>
+          <div class="setting-row"><span class="setting-label">HTF Swing Length</span><input class="setting-input" id="s_htfSwing" type="number" value="10"></div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">Precision Entry</div>
+          <div class="setting-row"><span class="setting-label">PE Box Thickness</span><input class="setting-input" id="s_peBox" type="number" step="0.01" value="0.18"></div>
+          <div class="setting-row"><span class="setting-label">POC Vol Threshold</span><input class="setting-input" id="s_pocVol" type="number" step="0.1" value="1.5"></div>
+          <div class="setting-row"><span class="setting-label">FVG Vol Threshold</span><input class="setting-input" id="s_fvgVol" type="number" step="0.1" value="1.2"></div>
+          <div class="setting-row"><span class="setting-label">OB ATR Momentum</span><input class="setting-input" id="s_obAtr" type="number" step="0.1" value="0.5"></div>
+        </div>
+        <div class="setting-group">
+          <div class="setting-group-title">RSI</div>
+          <div class="setting-row"><span class="setting-label">RSI Length</span><input class="setting-input" id="s_rsiLen" type="number" value="14"></div>
+          <div class="setting-row"><span class="setting-label">RSI Overbought</span><input class="setting-input" id="s_rsiOB" type="number" value="70"></div>
+          <div class="setting-row"><span class="setting-label">RSI Oversold</span><input class="setting-input" id="s_rsiOS" type="number" value="30"></div>
+        </div>
+      </div>
+      <button class="settings-save-btn" onclick="saveAndReload()">💾 Save & Reload</button>
+    </div>
+
+  </div>
     <div class="sdz-banner">
       <div>
         <div class="sdz-tag">⚡ TradingView Indicator</div>
@@ -8509,7 +8647,1117 @@ function injectExportButtons() {
   };
 })();
 
+// ═══════════════════════════════════════════════════════════════
+//  SD ZONES PRO — EMBEDDED (adapted from sd-zones.html)
+// ═══════════════════════════════════════════════════════════════
 
+const SYMBOL_MAP = {
+  XAUUSD:  { src:'yahoo', ticker:'GC=F',       decimals:2,  pip:0.01,   label:'Gold / USD',     pipLabel:'pts'   },
+  EURUSD:  { src:'yahoo', ticker:'EURUSD=X',   decimals:5,  pip:0.00001,label:'EUR / USD',       pipLabel:'pips'  },
+  GBPUSD:  { src:'yahoo', ticker:'GBPUSD=X',   decimals:5,  pip:0.00001,label:'GBP / USD',       pipLabel:'pips'  },
+  NAS100:  { src:'yahoo', ticker:'NQ=F',        decimals:1,  pip:0.1,    label:'NAS100 Futures', pipLabel:'pts'   },
+  US100:   { src:'yahoo', ticker:'^NDX',        decimals:2,  pip:0.01,   label:'US100 / NDX',    pipLabel:'pts'   },
+  BTCUSD:  { src:'binance',ticker:'BTCUSDT',   decimals:2,  pip:0.01,   label:'BTC / USDT',     pipLabel:'ticks' },
+  ETHUSDT: { src:'binance',ticker:'ETHUSDT',   decimals:2,  pip:0.01,   label:'ETH / USDT',     pipLabel:'ticks' }
+};
+const TF_TO_BINANCE = { 1:'1m',5:'5m',15:'15m',30:'30m',60:'1h',240:'4h',1440:'1d' };
+const TF_TO_YAHOO   = { 1:'1m',5:'5m',15:'15m',30:'30m',60:'60m',240:'1h',1440:'1d' };
+
+function sdzLoadSettings() {
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem('apex_sd_settings') || '{}'); } catch(e){}
+  return Object.assign({
+    swingLen:12, maxZones:8, maxZoneHeightATR:3.0, minZoneHeightATR:0.3, forceZoneHeightATR:0.5,
+    minZoneDistance:10, closeInvalidBars:2, vpGrids:8, volMultiplier:1.5, volMaLen:20,
+    rsiLen:14, rsiOB:70, rsiOS:30, peBoxThickness:0.18, pePocVolThreshold:1.5,
+    fvgVolThreshold:1.2, obAtrMomentum:0.5, htfTF:60, htfSwingLen:10, activeLookback:500
+  }, saved);
+}
+var P = sdzLoadSettings();
+var state = {
+  symbol: 'XAUUSD', tf: 15, htfTF: P.htfTF,
+  data: [], htfData: [], zones: [], htfZones: [],
+  chart: null, candleSeries: null,
+  focusMode: false, showHistoric: true,
+  accessGranted: false, panelOpen: true,
+  refreshTimer: null, latestTs: 0,
+  atr: 0, rsi: 0
+};
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 2 — DATA FETCHING
+// ═══════════════════════════════════════════════════════════════
+
+async function fetchCandles(symbol, tf, limit) {
+  var info = SYMBOL_MAP[symbol];
+  if (!info) throw new Error('Unknown symbol: ' + symbol);
+  if (info.src === 'binance') return fetchBinance(info.ticker, tf, limit);
+  return fetchYahoo(info.ticker, tf, limit);
+}
+
+async function fetchBinance(ticker, tf, limit) {
+  var interval = TF_TO_BINANCE[tf] || '15m';
+  var url = 'https://api.binance.com/api/v3/klines?symbol=' + ticker +
+    '&interval=' + interval + '&limit=' + Math.min(limit, 1000);
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('Binance HTTP ' + r.status);
+  var raw = await r.json();
+  return raw.map(function(k) {
+    return { time: Math.floor(k[0]/1000), open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5] };
+  });
+}
+
+async function fetchYahoo(ticker, tf, limit) {
+  var interval = TF_TO_YAHOO[tf] || '15m';
+  var range = tf <= 5 ? '1d' : tf <= 60 ? '5d' : tf <= 240 ? '60d' : '1y';
+  if (limit > 300 && tf <= 60) range = '60d';
+  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ticker) +
+    '?interval=' + interval + '&range=' + range + '&includePrePost=false';
+  var r = await fetch(url);
+  if (!r.ok) throw new Error('Yahoo HTTP ' + r.status);
+  var j = await r.json();
+  var res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error('Yahoo: no data for ' + ticker);
+  var ts = res.timestamp || [];
+  var q  = res.indicators.quote[0];
+  var out = [];
+  for (var i = 0; i < ts.length; i++) {
+    if (!ts[i] || !q.close[i]) continue;
+    out.push({ time:ts[i], open:q.open[i]||q.close[i], high:q.high[i]||q.close[i], low:q.low[i]||q.close[i], close:q.close[i], volume:q.volume[i]||0 });
+  }
+  // Sort & deduplicate by time
+  out.sort(function(a,b){return a.time-b.time;});
+  var deduped = [];
+  var lastT = -1;
+  out.forEach(function(c){ if(c.time !== lastT){ deduped.push(c); lastT=c.time; } });
+  return deduped.slice(-limit);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 3 — ZONE DETECTION ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+function calcATR(data, period) {
+  period = period || 20;
+  if (data.length < 2) return 1;
+  var trs = [];
+  for (var i = 1; i < data.length; i++) {
+    var hi = data[i].high, lo = data[i].low, pc = data[i-1].close;
+    trs.push(Math.max(hi-lo, Math.abs(hi-pc), Math.abs(lo-pc)));
+  }
+  var sum = 0;
+  var st = Math.max(0, trs.length - period);
+  for (var j = st; j < trs.length; j++) sum += trs[j];
+  return sum / (trs.length - st) || 1;
+}
+
+function isPivotHigh(data, i, swingLen) {
+  var pivot = data[i].high;
+  for (var k = Math.max(0, i-swingLen); k < i; k++) if (data[k].high >= pivot) return false;
+  for (var k = i+1; k <= Math.min(data.length-1, i+swingLen); k++) if (data[k].high >= pivot) return false;
+  return true;
+}
+
+function isPivotLow(data, i, swingLen) {
+  var pivot = data[i].low;
+  for (var k = Math.max(0, i-swingLen); k < i; k++) if (data[k].low <= pivot) return false;
+  for (var k = i+1; k <= Math.min(data.length-1, i+swingLen); k++) if (data[k].low <= pivot) return false;
+  return true;
+}
+
+function createZone(rawTop, rawBot, atr, type, startBar, session) {
+  var mid = (rawTop + rawBot) / 2;
+  var zH  = rawTop - rawBot;
+  var top = rawTop, bot = rawBot;
+  if (zH < atr * P.forceZoneHeightATR) {
+    var forced = atr * P.forceZoneHeightATR;
+    top = mid + forced/2; bot = mid - forced/2;
+  } else if (zH > atr * P.maxZoneHeightATR) {
+    var maxH = atr * P.maxZoneHeightATR;
+    top = mid + maxH/2; bot = mid - maxH/2;
+  }
+  var valid = (rawTop - rawBot) >= atr * P.minZoneHeightATR;
+  return { top:top, bottom:bot, startBar:startBar, session:session,
+    retests:0, broken:false, type:type, htfLevel:0,
+    score:0, probability:0, vpBuckets:[], peEntry:null,
+    peConf:0, peMatch:0, peGrade:'—',
+    peFactors:{ fvg:{found:false,level:null}, ob:{found:false,level:null},
+                mtf:{found:false,level:null}, poc:{found:false,level:null}, liq:{found:false,level:null} },
+    closeBeyondCount:0, retestCounted:false, valid:valid };
+}
+
+function getSession(ts) {
+  var d = new Date(ts*1000);
+  var totalMin = d.getUTCHours()*60 + d.getUTCMinutes();
+  if (totalMin >= 480 && totalMin < 570)  return 'LDN Open';
+  if (totalMin >= 570 && totalMin < 720)  return 'LDN Mid';
+  if (totalMin >= 810 && totalMin < 900)  return 'NY Open';
+  if (totalMin >= 900 && totalMin < 1020) return 'NY Mid';
+  return 'Off';
+}
+
+function tryMergeZone(zones, newZone) {
+  for (var i = 0; i < zones.length; i++) {
+    var z = zones[i];
+    if (z.type !== newZone.type || z.broken) continue;
+    if (newZone.top >= z.bottom && newZone.bottom <= z.top) {
+      z.top    = Math.max(z.top,    newZone.top);
+      z.bottom = Math.min(z.bottom, newZone.bottom);
+      return true;
+    }
+  }
+  return false;
+}
+
+function detectZones(data, atr, swingLen) {
+  var zones = [];
+  var n = data.length;
+  var needRight = swingLen;
+  var closeInvalidBars = P.closeInvalidBars;
+
+  // --- Phase 1: create zones from pivots ---
+  for (var i = swingLen; i < n - needRight; i++) {
+    var sess = getSession(data[i].time);
+
+    if (isPivotHigh(data, i, swingLen)) {
+      var rawTop = data[i].high;
+      var rawBot = data[i].close < data[i].open ? data[i].close : data[i].open; // body low of pivot bar
+      rawBot = Math.max(rawBot, rawTop - atr * P.maxZoneHeightATR);
+      var z = createZone(rawTop, rawBot, atr, 'Supply', i, sess);
+      if (z.valid && !tryMergeZone(zones, z)) {
+        if (zones.filter(function(x){return x.type==='Supply'&&!x.broken;}).length < P.maxZones) {
+          zones.push(z);
+        }
+      }
+    }
+
+    if (isPivotLow(data, i, swingLen)) {
+      var rawBot2 = data[i].low;
+      var rawTop2 = data[i].close > data[i].open ? data[i].close : data[i].open; // body high of pivot bar
+      rawTop2 = Math.min(rawTop2, rawBot2 + atr * P.maxZoneHeightATR);
+      var z2 = createZone(rawTop2, rawBot2, atr, 'Demand', i, sess);
+      if (z2.valid && !tryMergeZone(zones, z2)) {
+        if (zones.filter(function(x){return x.type==='Demand'&&!x.broken;}).length < P.maxZones) {
+          zones.push(z2);
+        }
+      }
+    }
+  }
+
+  // --- Phase 2: invalidation & retest counting ---
+  for (var zi = 0; zi < zones.length; zi++) {
+    var zone = zones[zi];
+    for (var ci = zone.startBar + 1; ci < n; ci++) {
+      var candle = data[ci];
+      var cl = candle.close;
+
+      if (zone.type === 'Supply') {
+        if (cl > zone.top) {
+          zone.closeBeyondCount++;
+          if (zone.closeBeyondCount >= closeInvalidBars) { zone.broken = true; break; }
+        } else if (cl < zone.bottom) {
+          zone.closeBeyondCount = 0;
+        }
+      } else {
+        if (cl < zone.bottom) {
+          zone.closeBeyondCount++;
+          if (zone.closeBeyondCount >= closeInvalidBars) { zone.broken = true; break; }
+        } else if (cl > zone.top) {
+          zone.closeBeyondCount = 0;
+        }
+      }
+
+      // Retest
+      var bodyH  = Math.max(candle.open, candle.close);
+      var bodyL  = Math.min(candle.open, candle.close);
+      var zoneH  = zone.top - zone.bottom;
+      var bodyOv = Math.max(0, Math.min(bodyH, zone.top) - Math.max(bodyL, zone.bottom));
+      var inZone = (cl >= zone.bottom && cl <= zone.top) || (zoneH > 0 && bodyOv/zoneH >= 0.3);
+
+      var prevC  = ci > 0 ? data[ci-1] : candle;
+      var correctApproach = zone.type === 'Supply'
+        ? (prevC.low < zone.bottom || prevC.close < zone.bottom)
+        : (prevC.high > zone.top   || prevC.close > zone.top);
+
+      if (inZone && correctApproach && !zone.retestCounted) {
+        zone.retests++;
+        zone.retestCounted = true;
+      }
+      if (!inZone) zone.retestCounted = false;
+    }
+    zone.age = n - 1 - zone.startBar;
+  }
+
+  return zones;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 4 — VOLUME PROFILE
+// ═══════════════════════════════════════════════════════════════
+
+function buildVolumeProfile(zone, data) {
+  var grids = P.vpGrids;
+  var buckets = new Array(grids).fill(0);
+  var zH = zone.top - zone.bottom;
+  if (zH <= 0) { zone.vpBuckets = buckets; return; }
+  var inc = zH / grids;
+
+  for (var i = zone.startBar; i < data.length; i++) {
+    var c = data[i];
+    var cTop = Math.max(c.open, c.close);
+    var cBot = Math.min(c.open, c.close);
+    var cRange = cTop - cBot || 0.0001;
+    for (var b = 0; b < grids; b++) {
+      var bTop = zone.bottom + (b+1)*inc;
+      var bBot = zone.bottom + b*inc;
+      var overlap = Math.max(0, Math.min(cTop,bTop) - Math.max(cBot,bBot));
+      buckets[b] += (overlap/cRange) * (c.volume||1);
+    }
+  }
+  zone.vpBuckets = buckets;
+  zone.pocIdx = buckets.indexOf(Math.max.apply(null, buckets));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 5 — PRECISION ENTRY
+// ═══════════════════════════════════════════════════════════════
+
+function calcPrecisionEntry(zone, data, atr, htfZones) {
+  var i = data.length - 1;
+  var zTop = zone.top, zBot = zone.bottom;
+  var factors = { fvg:null, ob:null, mtf:null, poc:null, liq:null };
+
+  // --- Factor 1: FVG ---
+  var volMA = 0;
+  var volSum = 0, volCnt = 0;
+  for (var vi = Math.max(0,i-20); vi <= i; vi++) { volSum += data[vi].volume||0; volCnt++; }
+  volMA = volCnt ? volSum/volCnt : 1;
+
+  for (var fi = 2; fi <= Math.min(i, 30); fi++) {
+    var d0=data[fi], d1=data[fi-1], d2=data[fi-2];
+    if (!d0||!d1||!d2) continue;
+    var fvgMid = null;
+    if (zone.type==='Demand' && d0.low > d2.high && d1.volume >= volMA*P.fvgVolThreshold) {
+      fvgMid = (d0.low + d2.high)/2;
+    } else if (zone.type==='Supply' && d0.high < d2.low && d1.volume >= volMA*P.fvgVolThreshold) {
+      fvgMid = (d0.high + d2.low)/2;
+    }
+    if (fvgMid !== null && fvgMid >= zBot && fvgMid <= zTop) {
+      factors.fvg = { found:true, level:fvgMid }; break;
+    }
+  }
+
+  // --- Factor 2: Order Block ---
+  for (var oi = 2; oi <= Math.min(i, 50); oi++) {
+    var d0=data[oi], d1=data[oi-1];
+    if (!d0||!d1) continue;
+    if (zone.type==='Demand') {
+      var isBearOB = d1.close < d1.open;
+      var isBullImpulse = d0.close > d0.open && (d0.close-d0.open) > atr*P.obAtrMomentum;
+      if (isBearOB && isBullImpulse) {
+        var obMid = (d1.high + d1.low)/2;
+        if (obMid >= zBot && obMid <= zTop) { factors.ob = { found:true, level:obMid }; break; }
+      }
+    } else {
+      var isBullOB = d1.close > d1.open;
+      var isBearImpulse = d0.close < d0.open && (d0.open-d0.close) > atr*P.obAtrMomentum;
+      if (isBullOB && isBearImpulse) {
+        var obMid = (d1.high + d1.low)/2;
+        if (obMid >= zBot && obMid <= zTop) { factors.ob = { found:true, level:obMid }; break; }
+      }
+    }
+  }
+
+  // --- Factor 3: MTF Pivot ---
+  for (var hi = 0; hi < htfZones.length; hi++) {
+    var hz = htfZones[hi];
+    var hMid = (hz.top + hz.bottom)/2;
+    if (hz.type === zone.type && hMid >= zBot && hMid <= zTop) {
+      factors.mtf = { found:true, level:hMid }; break;
+    }
+  }
+
+  // --- Factor 4: POC ---
+  if (zone.vpBuckets && zone.vpBuckets.length) {
+    var bks = zone.vpBuckets;
+    var avgVol = bks.reduce(function(a,b){return a+b;},0) / bks.length;
+    var bestIdx = bks.indexOf(Math.max.apply(null,bks));
+    if (bks[bestIdx] >= avgVol * P.pePocVolThreshold) {
+      var inc = (zTop-zBot)/bks.length;
+      var pocLevel = zTop - inc*(bestIdx+0.5);
+      factors.poc = { found:true, level:pocLevel };
+    }
+  }
+
+  // --- Factor 5: Liquidity Sweep ---
+  var sweepRange = atr * 2.5;
+  for (var si = 5; si <= Math.min(i, 80); si++) {
+    var d = data[si];
+    if (zone.type==='Supply' && d.high > zTop && d.high < zTop+sweepRange) {
+      // check subsequent candle closed back below
+      if (si+1 < data.length && data[si+1].close < zTop) {
+        factors.liq = { found:true, level:d.high }; break;
+      }
+    } else if (zone.type==='Demand' && d.low < zBot && d.low > zBot-sweepRange) {
+      if (si+1 < data.length && data[si+1].close > zBot) {
+        factors.liq = { found:true, level:d.low }; break;
+      }
+    }
+  }
+
+  // --- Entry Calculation ---
+  var weights = { ob:30, fvg:25, mtf:20, poc:15, liq:10 };
+  var totalW = 0, totalWL = 0, conf = 0;
+  var matchCount = 0;
+  ['ob','fvg','mtf','poc','liq'].forEach(function(k) {
+    if (factors[k] && factors[k].found) {
+      totalW  += weights[k];
+      totalWL += weights[k] * factors[k].level;
+      conf    += weights[k];
+      matchCount++;
+    }
+  });
+
+  var entry = null;
+  if (matchCount === 1) {
+    var fKey = ['ob','fvg','mtf','poc','liq'].find(function(k){return factors[k]&&factors[k].found;});
+    entry = factors[fKey].level;
+  } else if (matchCount >= 2 && totalW > 0) {
+    entry = totalWL / totalW;
+  }
+  if (entry !== null) entry = Math.max(zBot, Math.min(zTop, entry));
+
+  var grade = '—';
+  if (conf >= 80) grade = 'A+++';
+  else if (conf >= 55) grade = 'A+';
+  else if (conf >= 30) grade = 'B';
+  else if (conf > 0)   grade = 'C';
+
+  zone.peEntry  = entry;
+  zone.peConf   = conf;
+  zone.peMatch  = matchCount;
+  zone.peGrade  = grade;
+  zone.peFactors = {
+    fvg: factors.fvg || {found:false,level:null},
+    ob:  factors.ob  || {found:false,level:null},
+    mtf: factors.mtf || {found:false,level:null},
+    poc: factors.poc || {found:false,level:null},
+    liq: factors.liq || {found:false,level:null}
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 6 — HTF CONFLUENCE
+// ═══════════════════════════════════════════════════════════════
+
+function calcHTFConfluence(ltfZones, htfZones) {
+  ltfZones.forEach(function(z) {
+    z.htfLevel = 0;
+    for (var hi = 0; hi < htfZones.length; hi++) {
+      var hz = htfZones[hi];
+      if (hz.type !== z.type || hz.broken) continue;
+      var inside = z.top <= hz.top && z.bottom >= hz.bottom;
+      var partial = z.top >= hz.bottom && z.bottom <= hz.top;
+      if (inside) { z.htfLevel = 2; break; }
+      if (partial) { z.htfLevel = Math.max(z.htfLevel, 1); }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 7 — SCORING & PROBABILITY
+// ═══════════════════════════════════════════════════════════════
+
+function calcScore(zone, currentPrice, atr) {
+  var base = 3.5;
+  var sess = zone.session || '';
+  var sessScore = (sess==='LDN Open'||sess==='NY Open') ? 2.0 : (sess==='LDN Mid'||sess==='NY Mid') ? 1.0 : 0;
+  var age = zone.age || 0;
+  var agePenalty = age < 150 ? 0 : age < 350 ? 0.5 : age < 600 ? 1.0 : 1.5;
+  var retestPenalty = zone.retests <= 1 ? 0 : zone.retests === 2 ? 0.5 : zone.retests === 3 ? 1.0 : 1.5;
+  var heightRatio = (zone.top - zone.bottom) / (atr||1);
+  var heightScore = (heightRatio >= 0.5 && heightRatio <= 2.0) ? 1.0 : heightRatio < 0.5 ? 0.5 : 0;
+  var distPrice = Math.abs(currentPrice - (zone.top+zone.bottom)/2);
+  var rATR = distPrice / (atr||1);
+  var distScore = rATR < 1.0 ? 1.5 : rATR < 3.0 ? 1.0 : rATR < 8.0 ? 0.5 : 0;
+  var htfScore = zone.htfLevel === 2 ? 1.5 : zone.htfLevel === 1 ? 0.75 : 0;
+  var raw = base + sessScore + heightScore + distScore + htfScore - agePenalty - retestPenalty;
+  return Math.round(Math.max(0, Math.min(10, raw)));
+}
+
+function calcProbability(zone, currentPrice, atr) {
+  var base = 50;
+  var sc   = zone.score || 0;
+  var scoreContrib = (sc-5)*4;
+  var htfContrib = zone.htfLevel===2 ? 12 : zone.htfLevel===1 ? 6 : 0;
+  var ret = zone.retests;
+  var retestContrib = ret===0 ? 8 : ret===1 ? 4 : ret===2 ? -4 : -10;
+  var sess = zone.session||'';
+  var sessContrib = (sess==='LDN Open'||sess==='NY Open') ? 6 : (sess==='LDN Mid'||sess==='NY Mid') ? 3 : 0;
+  var age = zone.age||0;
+  var ageContrib = age < 150 ? 3 : age < 400 ? 0 : -5;
+  var distPrice = Math.abs(currentPrice - (zone.top+zone.bottom)/2);
+  var rATR = distPrice / (atr||1);
+  var distContrib = rATR < 1.5 ? 4 : rATR < 5.0 ? 0 : -3;
+  var impulseContrib = (age < 50 && ret === 0) ? 5 : 0;
+  var total = base + scoreContrib + htfContrib + retestContrib + sessContrib + ageContrib + distContrib + impulseContrib;
+  return Math.round(Math.max(10, Math.min(95, total)));
+}
+
+function calcRSI(data, period) {
+  if (data.length < period+1) return 50;
+  var gains = 0, losses = 0;
+  for (var i = data.length-period; i < data.length; i++) {
+    var d = data[i].close - data[i-1].close;
+    if (d > 0) gains += d; else losses -= d;
+  }
+  var avgG = gains/period, avgL = losses/period;
+  if (avgL === 0) return 100;
+  var rs = avgG/avgL;
+  return Math.round(100 - 100/(1+rs));
+}
+
+function detectTrend(data, emaLen) {
+  if (data.length < emaLen) return 'Neutral';
+  var k = 2/(emaLen+1);
+  var ema = data[0].close;
+  for (var i = 1; i < data.length; i++) ema = data[i].close*k + ema*(1-k);
+  var last = data[data.length-1].close;
+  if (last > ema*1.001) return 'Bullish';
+  if (last < ema*0.999) return 'Bearish';
+  return 'Neutral';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 8 — CHART RENDERER (Lightweight Charts + Primitives)
+// ═══════════════════════════════════════════════════════════════
+
+var lwChart     = null;
+var lwCandles   = null;
+var lwPrimitive = null;
+
+function initChart() {
+  if (lwChart) { lwChart.remove(); lwChart = null; }
+  var container = document.getElementById('chart-container');
+  lwChart = LightweightCharts.createChart(container, {
+    layout: { background:{ type:'solid', color:'#0d0d0d' }, textColor:'#d1d4dc' },
+    grid: { vertLines:{ color:'#1e1e1e' }, horzLines:{ color:'#1e1e1e' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor:'#1e1e1e' },
+    timeScale: { borderColor:'#1e1e1e', timeVisible:true, secondsVisible:false },
+    handleScroll: true, handleScale: true
+  });
+  lwCandles = lwChart.addCandlestickSeries({
+    upColor:'#26a69a', downColor:'#ef5350',
+    wickUpColor:'#26a69a', wickDownColor:'#ef5350',
+    borderVisible:false
+  });
+
+  // Crosshair price display
+  lwChart.subscribeCrosshairMove(function(param) {
+    if (!param.point || !lwCandles) return;
+    var price = param.seriesData.get(lwCandles);
+    if (price) {
+      var info = document.getElementById('crosshairInfo');
+      info.classList.add('visible');
+      var fmt = formatPrice(price.close, state.symbol);
+      // Find nearest zone
+      var nearest = getNearestZone(price.close);
+      var distStr = '';
+      if (nearest) {
+        var mid = (nearest.top+nearest.bottom)/2;
+        var dist = Math.abs(price.close - mid);
+        distStr = ' | Next: ' + formatPrice(dist, state.symbol) + ' ' + (SYMBOL_MAP[state.symbol]||{}).pipLabel;
+      }
+      info.textContent = fmt + distStr;
+    } else {
+      document.getElementById('crosshairInfo').classList.remove('visible');
+    }
+  });
+}
+
+function renderZonesOnChart() {
+  if (!lwChart || !lwCandles) return;
+
+  // Remove old series primitive markers
+  lwCandles.setMarkers([]);
+
+  // Build markers for retest labels
+  var markers = [];
+  state.zones.forEach(function(z) {
+    if (z.broken || z.retests === 0) return;
+    for (var ri = 0; ri < Math.min(z.retests, 3); ri++) {
+      var approxBar = state.data[Math.min(z.startBar + 10*(ri+1), state.data.length-1)];
+      if (!approxBar) continue;
+      markers.push({
+        time: approxBar.time,
+        position: z.type==='Supply' ? 'aboveBar' : 'belowBar',
+        color: z.type==='Supply' ? '#ef5350' : '#26a69a',
+        shape: 'circle', size: 0.4,
+        text: 'R' + (ri+1)
+      });
+    }
+  });
+  try { lwCandles.setMarkers(markers); } catch(e){}
+
+  // Draw zone boxes via ISeriesPrimitive
+  if (lwPrimitive) { lwChart.removeSeries && null; } // can't remove primitives directly
+
+  // Use price lines as zone markers (lightweight approach)
+  // Remove old price lines
+  if (state._zoneLines) {
+    state._zoneLines.forEach(function(pl) { try { lwCandles.removePriceLine(pl); } catch(e){} });
+  }
+  state._zoneLines = [];
+
+  // Add price lines for each zone (top, bottom, entry)
+  state.zones.forEach(function(z) {
+    if (!z.valid) return;
+    var isHist = z.broken;
+    var isActive = !z.broken;
+    var isHtf = z.htfLevel >= 2;
+    if (isHist && !state.showHistoric) return;
+
+    var supCol  = isHtf ? '#ff5252' : '#ef5350';
+    var demCol  = isHtf ? '#26a69a' : '#26a69a';
+    var col     = z.type==='Supply' ? supCol : demCol;
+    if (isHist) col = '#9e9e9e';
+    if (state.focusMode && !isActive) col = 'rgba(158,158,158,0.3)';
+
+    // Top line
+    var pl = lwCandles.createPriceLine({
+      price:z.top, color:col, lineWidth:1,
+      lineStyle:LightweightCharts.LineStyle.Solid,
+      axisLabelVisible:false, title:''
+    });
+    state._zoneLines.push(pl);
+
+    // Bottom line
+    var pl2 = lwCandles.createPriceLine({
+      price:z.bottom, color:col, lineWidth:1,
+      lineStyle:LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible:false, title:''
+    });
+    state._zoneLines.push(pl2);
+
+    // Mid / score label
+    if (!isHist) {
+      var mid = (z.top+z.bottom)/2;
+      var lbl = (z.type==='Supply'?'S':'D') + z.score + (z.htfLevel>=2?' ★':'') + (z.retests>0?' R'+z.retests:'');
+      var pl3 = lwCandles.createPriceLine({
+        price:mid, color:col, lineWidth:1,
+        lineStyle:LightweightCharts.LineStyle.Dotted,
+        axisLabelVisible:true, title:lbl
+      });
+      state._zoneLines.push(pl3);
+    }
+
+    // Precision entry
+    if (z.peEntry && isActive) {
+      var entryCol = z.type==='Supply' ? 'rgba(244,67,54,0.9)' : 'rgba(76,175,80,0.9)';
+      var pl4 = lwCandles.createPriceLine({
+        price:z.peEntry, color:entryCol, lineWidth:2,
+        lineStyle:LightweightCharts.LineStyle.Solid,
+        axisLabelVisible:true, title:'PE ' + z.peGrade + ' ' + z.peConf+'%'
+      });
+      state._zoneLines.push(pl4);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 9 — PANEL RENDERER
+// ═══════════════════════════════════════════════════════════════
+
+function renderPanel() {
+  var data = state.data;
+  if (!data.length) return;
+  var currentPrice = data[data.length-1].close;
+  var sym  = SYMBOL_MAP[state.symbol] || {};
+  var dec  = sym.decimals || 2;
+
+  // HTF Trend
+  var h1Trend = 'Neutral', h4Trend = 'Neutral';
+  if (state.htfData && state.htfData.length > 20) {
+    h1Trend = detectTrend(state.htfData, 20);
+  }
+  // Approximate H4 from existing LTF data
+  if (data.length > 50) h4Trend = detectTrend(data, 50);
+  setTrendEl('htfH1', h1Trend);
+  setTrendEl('htfH4', h4Trend);
+
+  // Session
+  var lastTs  = data[data.length-1].time;
+  var sess    = getSession(lastTs);
+  document.getElementById('sessionLabel').textContent = sess;
+
+  // RSI
+  var rsiVal = calcRSI(data, P.rsiLen);
+  state.rsi = rsiVal;
+  var rsiEl = document.getElementById('rsiLabel');
+  rsiEl.textContent = rsiVal + ' — ' + (rsiVal >= P.rsiOB ? 'OB' : rsiVal <= P.rsiOS ? 'OS' : 'Neutral');
+  rsiEl.className = 'panel-value ' + (rsiVal >= P.rsiOB ? 'rsi-ob' : rsiVal <= P.rsiOS ? 'rsi-os' : 'rsi-neut');
+
+  // Volume
+  var lastVol  = data[data.length-1].volume;
+  var avgVol   = state.atr ? state.atr : 1;
+  var volMaSum = 0;
+  for (var vi = Math.max(0,data.length-20); vi < data.length; vi++) volMaSum += data[vi].volume;
+  var volMa = volMaSum / Math.min(20, data.length);
+  var volRatio = volMa > 0 ? lastVol/volMa : 1;
+  document.getElementById('volLabel').textContent =
+    (lastVol > volMa*1.5 ? '🔥 High (' : lastVol < volMa*0.7 ? '📉 Low (' : '— Normal (') +
+    volRatio.toFixed(1) + 'x)';
+
+  // Zones sorted by distance
+  var activeCopy = state.zones.filter(function(z){ return !z.broken && z.valid; });
+  activeCopy.sort(function(a,b){
+    var da = Math.abs(currentPrice-(a.top+a.bottom)/2);
+    var db = Math.abs(currentPrice-(b.top+b.bottom)/2);
+    return da-db;
+  });
+
+  // Current (Nearest) Zone
+  var nearestEl = document.getElementById('currentZonePanel');
+  var nearest = activeCopy[0];
+  if (nearest) {
+    var mid    = (nearest.top+nearest.bottom)/2;
+    var dist   = Math.abs(currentPrice - mid);
+    var scoreClass = nearest.score >= 7 ? 'score-high' : nearest.score >= 4 ? 'score-mid' : 'score-low';
+    nearestEl.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">' +
+        '<span class="panel-tag ' + (nearest.type==='Supply'?'tag-bear':'tag-bull') + '">' + nearest.type + '</span>' +
+        '<div class="score-ring ' + scoreClass + '">' + nearest.score + '</div>' +
+      '</div>' +
+      '<div class="panel-row"><span class="panel-label">Top</span><span class="panel-value">' + formatPrice(nearest.top, state.symbol) + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Bottom</span><span class="panel-value">' + formatPrice(nearest.bottom, state.symbol) + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Distance</span><span class="panel-value">' + formatPrice(dist, state.symbol) + ' ' + (sym.pipLabel||'') + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Retests</span><span class="panel-value">' + nearest.retests + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">HTF Level</span><span class="panel-value">' + ['None','Partial','Full'][nearest.htfLevel] + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Session</span><span class="panel-value">' + (nearest.session||'—') + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Age</span><span class="panel-value">' + (nearest.age||0) + ' bars</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Probability</span><span class="panel-value">' + nearest.probability + '%</span></div>';
+  } else {
+    nearestEl.innerHTML = '<div style="color:var(--ink3);font-size:12px">No active zones nearby</div>';
+  }
+
+  // Next 2 zones
+  var nextEl = document.getElementById('nextZonesPanel');
+  var next2  = activeCopy.slice(1,3);
+  if (!next2.length) {
+    nextEl.innerHTML = '<div style="color:var(--ink3);font-size:12px">—</div>';
+  } else {
+    nextEl.innerHTML = next2.map(function(z) {
+      var mid2 = (z.top+z.bottom)/2;
+      var dist2 = Math.abs(currentPrice - mid2);
+      var dir   = mid2 > currentPrice ? '↑' : '↓';
+      var sc2   = z.score >= 7 ? 'score-high' : z.score >= 4 ? 'score-mid' : 'score-low';
+      return '<div class="next-zone-card">' +
+        '<div class="nzc-header">' +
+          '<span class="nzc-type ' + (z.type==='Supply'?'supply-col':'demand-col') + '">' + dir + ' ' + z.type + '</span>' +
+          '<div class="score-ring ' + sc2 + '" style="width:28px;height:28px;font-size:10px">' + z.score + '</div>' +
+        '</div>' +
+        '<div class="panel-row"><span class="panel-label">Distance</span><span class="panel-value">' + formatPrice(dist2,state.symbol) + '</span></div>' +
+        '<div class="panel-row"><span class="panel-label">HTF</span><span class="panel-value">' + ['—','Partial','Full'][z.htfLevel] + '</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Setup Quality
+  var sqEl = document.getElementById('setupQualityPanel');
+  if (nearest) {
+    var pros = [], cons = [];
+    if (nearest.htfLevel >= 2) pros.push('Strong HTF confluence');
+    if (nearest.retests === 0) pros.push('Fresh zone — untouched');
+    if (nearest.session === 'LDN Open' || nearest.session === 'NY Open') pros.push('Premium session entry');
+    if (nearest.score >= 8) pros.push('High score (' + nearest.score + '/10)');
+    if (nearest.peConf >= 55) pros.push('Multi-factor PE (' + nearest.peConf + '% conf)');
+    if (nearest.retests >= 3) cons.push('Zone has been tested ' + nearest.retests + 'x');
+    if (nearest.age > 500) cons.push('Old zone (age ' + nearest.age + ' bars)');
+    if (nearest.htfLevel === 0) cons.push('No HTF confirmation');
+    if (rsiVal >= P.rsiOB && nearest.type === 'Supply') pros.push('RSI overbought — Supply aligned');
+    if (rsiVal <= P.rsiOS && nearest.type === 'Demand') pros.push('RSI oversold — Demand aligned');
+    var quality = (nearest.score >= 7 && nearest.htfLevel >= 1) ? 'HIGH' :
+                  (nearest.score >= 4) ? 'MEDIUM' : 'LOW';
+    var qClass  = quality === 'HIGH' ? 'tag-high' : quality === 'MEDIUM' ? 'tag-med' : 'tag-low';
+    sqEl.innerHTML =
+      '<div style="margin-bottom:8px"><span class="panel-tag ' + qClass + '">' + quality + '</span></div>' +
+      (pros.length ? '<div class="pro-con-list">' + pros.map(function(p){return '<div class="pro-item"><span>✓</span>'+p+'</div>';}).join('') + '</div>' : '') +
+      (cons.length ? '<div class="pro-con-list" style="margin-top:6px">' + cons.map(function(c){return '<div class="con-item"><span>✗</span>'+c+'</div>';}).join('') + '</div>' : '');
+  } else {
+    sqEl.innerHTML = '<div style="color:var(--ink3);font-size:12px">No active setup detected</div>';
+  }
+
+  // Precision Entry Panel
+  var peEl = document.getElementById('precisionEntryPanel');
+  if (nearest && nearest.peEntry) {
+    var gc = nearest.peGrade==='A+++'?'#69f0ae':nearest.peGrade==='A+'?'#26a69a':nearest.peGrade==='B'?'#ffa726':'#ff7043';
+    var factors = nearest.peFactors;
+    peEl.innerHTML =
+      '<div class="panel-row"><span class="panel-label">Target</span><span class="panel-value ' + (nearest.type==='Supply'?'supply-col':'demand-col') + '">' + nearest.type + ' Zone</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Entry Level</span><span class="panel-value">' + formatPrice(nearest.peEntry, state.symbol) + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Grade</span><span class="panel-value" style="color:' + gc + '">' + nearest.peGrade + '</span></div>' +
+      '<div class="panel-row"><span class="panel-label">Confluence</span><span class="panel-value">' + nearest.peConf + '% (' + nearest.peMatch + '/5)</span></div>' +
+      '<div style="margin-top:8px;border-top:0.5px solid var(--rim);padding-top:8px">' +
+        '<div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px">5 Entry Factors</div>' +
+        ['FVG','OB','MTF','POC','LIQ'].map(function(fk) {
+          var key = fk.toLowerCase();
+          var f   = factors[key] || {found:false};
+          return '<div class="factor-row">' +
+            '<span style="font-family:var(--font-mono);font-size:10px">' + fk + '</span>' +
+            '<span class="' + (f.found?'factor-found':'factor-miss') + '">' + (f.found?'✓':'·') + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+  } else if (nearest) {
+    peEl.innerHTML = '<div style="color:var(--ink3);font-size:12px">Likely reaction at mid — no PE factor confluence</div>';
+  } else {
+    peEl.innerHTML = '<div style="color:var(--ink3);font-size:12px">—</div>';
+  }
+
+  // Update price display in toolbar
+  var priceEl = document.getElementById('priceDisplay');
+  if (priceEl) priceEl.textContent = formatPrice(currentPrice, state.symbol);
+}
+
+function setTrendEl(id, trend) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var cls = trend==='Bullish'?'tag-bull':trend==='Bearish'?'tag-bear':'tag-neut';
+  el.innerHTML = '<span class="panel-tag ' + cls + '">' + trend + '</span>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 10 — ACCESS CONTROL
+// ═══════════════════════════════════════════════════════════════
+function checkAccess(uid, callback) {
+  if (!db) { callback(true, null); return; } // no db → allow (dev mode)
+  db.collection('apexUsers').doc(uid).get().then(function(doc) {
+    if (!doc.exists) { callback(false, 'No subscription found.'); return; }
+    var d = doc.data();
+    var active  = d.subscriptionActive === true;
+    var expiry  = d.subscriptionExpiry ? d.subscriptionExpiry.toDate() : null;
+    var expired = expiry ? expiry < new Date() : false;
+    if (active && !expired) callback(true, null);
+    else callback(false, expired ? 'Subscription expired.' : 'No active subscription.');
+  }).catch(function() { callback(true, null); }); // network error → allow
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 11 — MAIN INIT & AUTO-REFRESH
+// ═══════════════════════════════════════════════════════════════
+
+var currentSymbol = 'XAUUSD';
+var currentTF     = 15;
+var isLoading     = false;
+
+async function loadData() {
+  if (isLoading) return;
+  isLoading = true;
+  showLoading('FETCHING MARKET DATA…');
+  hideError();
+
+  try {
+    var sym = state.symbol;
+    var tf  = state.tf;
+
+    // Fetch LTF + HTF in parallel
+    var [ltf, htf] = await Promise.all([
+      fetchCandles(sym, tf, 500),
+      fetchCandles(sym, P.htfTF, 200)
+    ]);
+
+    state.data    = ltf;
+    state.htfData = htf;
+    state.latestTs = ltf.length ? ltf[ltf.length-1].time : 0;
+
+    var atr = calcATR(ltf);
+    state.atr = atr;
+
+    // Zone detection
+    var ltfZones = detectZones(ltf, atr, P.swingLen);
+    var htfZones = detectZones(htf, calcATR(htf), P.htfSwingLen);
+    state.zones    = ltfZones;
+    state.htfZones = htfZones;
+
+    // HTF confluence
+    calcHTFConfluence(ltfZones, htfZones);
+
+    // Volume profiles
+    ltfZones.forEach(function(z) { buildVolumeProfile(z, ltf); });
+    htfZones.forEach(function(z) { buildVolumeProfile(z, htf); });
+
+    // Scoring
+    var lastPrice = ltf.length ? ltf[ltf.length-1].close : 0;
+    ltfZones.forEach(function(z) {
+      z.score       = calcScore(z, lastPrice, atr);
+      z.probability = calcProbability(z, lastPrice, atr);
+    });
+
+    // Precision entries
+    if (state.accessGranted) {
+      ltfZones.forEach(function(z) {
+        if (!z.broken && z.valid) calcPrecisionEntry(z, ltf, atr, htfZones);
+      });
+    }
+
+    // Render chart data
+    if (!lwChart) initChart();
+    var chartData = ltf.map(function(c) {
+      return { time:c.time, open:c.open, high:c.high, low:c.low, close:c.close };
+    });
+    lwCandles.setData(chartData);
+
+    if (state.accessGranted) {
+      renderZonesOnChart();
+      document.getElementById('lockedOverlay').style.display = 'none';
+    } else {
+      document.getElementById('lockedOverlay').style.display = 'flex';
+    }
+
+    hideLoading();
+    renderPanel();
+    checkLiveBadge();
+
+    // Update symbol info label
+    var info = SYMBOL_MAP[sym];
+    if (info) document.getElementById('symbolInfo').textContent = info.label;
+
+  } catch(err) {
+    console.error('SD Zones fetch error:', err);
+    showError('Could not fetch data for ' + state.symbol + '.\n' + err.message);
+  }
+  isLoading = false;
+}
+
+function scheduleRefresh() {
+  if (state.refreshTimer) clearInterval(state.refreshTimer);
+  state.refreshTimer = setInterval(function() {
+    updateLatestCandle();
+  }, 60000);
+}
+
+async function updateLatestCandle() {
+  // Lightweight refresh — only update last candle and re-score
+  try {
+    var ltf = await fetchCandles(state.symbol, state.tf, 20);
+    if (!ltf.length) return;
+    var latest = ltf[ltf.length-1];
+    // Update last candle in chart
+    if (lwCandles) {
+      lwCandles.update({ time:latest.time, open:latest.open, high:latest.high, low:latest.low, close:latest.close });
+    }
+    // Merge into state data
+    if (state.data.length && state.data[state.data.length-1].time === latest.time) {
+      state.data[state.data.length-1] = latest;
+    } else {
+      state.data.push(latest);
+    }
+    state.latestTs = latest.time;
+    checkLiveBadge();
+    renderPanel();
+  } catch(e) { /* silent refresh fail */ }
+}
+
+function checkLiveBadge() {
+  var now = Math.floor(Date.now()/1000);
+  var live = (now - state.latestTs) < 120;
+  var badge = document.getElementById('liveBadge');
+  if (live) badge.classList.add('visible'); else badge.classList.remove('visible');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SECTION 12 — UI & EVENT HANDLERS
+// ═══════════════════════════════════════════════════════════════
+
+function onSymbolChange() {
+  state.symbol = document.getElementById('symbolSelect').value;
+  loadData();
+}
+function onTFChange() {
+  state.tf = parseInt(document.getElementById('tfSelect').value);
+  loadData();
+}
+
+function toggleFocusMode() {
+  state.focusMode = !state.focusMode;
+  var btn = document.getElementById('focusBtn');
+  btn.classList.toggle('active', state.focusMode);
+  renderZonesOnChart();
+}
+
+function toggleHistoric() {
+  state.showHistoric = !state.showHistoric;
+  var btn = document.getElementById('histBtn');
+  btn.classList.toggle('active', !state.showHistoric);
+  renderZonesOnChart();
+}
+
+function togglePanel() {
+  var panel = document.getElementById('analysisPanel');
+  var btn   = document.getElementById('chartPanelBtn');
+  state.panelOpen = !state.panelOpen;
+  panel.classList.toggle('hidden', !state.panelOpen);
+  btn.textContent = state.panelOpen ? '›' : '‹';
+  if (lwChart) setTimeout(function() { lwChart.timeScale().fitContent(); }, 350);
+}
+
+function openSettings() {
+  // Fill inputs from P
+  document.getElementById('s_swingLen').value   = P.swingLen;
+  document.getElementById('s_maxZones').value   = P.maxZones;
+  document.getElementById('s_maxZoneH').value   = P.maxZoneHeightATR;
+  document.getElementById('s_minZoneH').value   = P.minZoneHeightATR;
+  document.getElementById('s_forceZoneH').value = P.forceZoneHeightATR;
+  document.getElementById('s_minZoneDist').value= P.minZoneDistance;
+  document.getElementById('s_closeInvalid').value=P.closeInvalidBars;
+  document.getElementById('s_vpGrids').value    = P.vpGrids;
+  document.getElementById('s_volMult').value    = P.volMultiplier;
+  document.getElementById('s_htfTF').value      = P.htfTF;
+  document.getElementById('s_htfSwing').value   = P.htfSwingLen;
+  document.getElementById('s_peBox').value      = P.peBoxThickness;
+  document.getElementById('s_pocVol').value     = P.pePocVolThreshold;
+  document.getElementById('s_fvgVol').value     = P.fvgVolThreshold;
+  document.getElementById('s_obAtr').value      = P.obAtrMomentum;
+  document.getElementById('s_rsiLen').value     = P.rsiLen;
+  document.getElementById('s_rsiOB').value      = P.rsiOB;
+  document.getElementById('s_rsiOS').value      = P.rsiOS;
+  document.getElementById('settingsPanel').classList.add('open');
+  document.getElementById('settingsBackdrop').classList.add('open');
+}
+function closeSettings() {
+  document.getElementById('settingsPanel').classList.remove('open');
+  document.getElementById('settingsBackdrop').classList.remove('open');
+}
+function saveAndReload() {
+  P.swingLen          = parseInt(document.getElementById('s_swingLen').value)||12;
+  P.maxZones          = parseInt(document.getElementById('s_maxZones').value)||8;
+  P.maxZoneHeightATR  = parseFloat(document.getElementById('s_maxZoneH').value)||3.0;
+  P.minZoneHeightATR  = parseFloat(document.getElementById('s_minZoneH').value)||0.3;
+  P.forceZoneHeightATR= parseFloat(document.getElementById('s_forceZoneH').value)||0.5;
+  P.minZoneDistance   = parseInt(document.getElementById('s_minZoneDist').value)||10;
+  P.closeInvalidBars  = parseInt(document.getElementById('s_closeInvalid').value)||2;
+  P.vpGrids           = parseInt(document.getElementById('s_vpGrids').value)||8;
+  P.volMultiplier     = parseFloat(document.getElementById('s_volMult').value)||1.5;
+  P.htfTF             = parseInt(document.getElementById('s_htfTF').value)||60;
+  P.htfSwingLen       = parseInt(document.getElementById('s_htfSwing').value)||10;
+  P.peBoxThickness    = parseFloat(document.getElementById('s_peBox').value)||0.18;
+  P.pePocVolThreshold = parseFloat(document.getElementById('s_pocVol').value)||1.5;
+  P.fvgVolThreshold   = parseFloat(document.getElementById('s_fvgVol').value)||1.2;
+  P.obAtrMomentum     = parseFloat(document.getElementById('s_obAtr').value)||0.5;
+  P.rsiLen            = parseInt(document.getElementById('s_rsiLen').value)||14;
+  P.rsiOB             = parseInt(document.getElementById('s_rsiOB').value)||70;
+  P.rsiOS             = parseInt(document.getElementById('s_rsiOS').value)||30;
+  localStorage.setItem('apex_sd_settings', JSON.stringify(P));
+  closeSettings();
+  loadData();
+}
+
+function retryLoad() {
+  document.getElementById('errorState').style.display = 'none';
+  loadData();
+}
+
+function showLoading(msg) {
+  var ov = document.getElementById('loadingOverlay');
+  ov.style.display = 'flex';
+  document.getElementById('loadingText').textContent = msg || 'LOADING…';
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+function showError(msg) {
+  hideLoading();
+  var es = document.getElementById('errorState');
+  es.style.display = 'flex';
+  document.getElementById('errorMsg').textContent = msg;
+}
+function hideError() {
+  document.getElementById('errorState').style.display = 'none';
+}
+
+function formatPrice(price, symbol) {
+  var info = SYMBOL_MAP[symbol] || { decimals:2 };
+  if (!isFinite(price) || price === null) return '—';
+  return parseFloat(price).toFixed(info.decimals);
+}
+
+function getNearestZone(price) {
+  var best = null, bestDist = Infinity;
+  state.zones.forEach(function(z) {
+    if (z.broken || !z.valid) return;
+    var mid  = (z.top+z.bottom)/2;
+    var dist = Math.abs(price - mid);
+    if (dist < bestDist) { bestDist = dist; best = z; }
+  });
+  return best;
+}
+
+// Tooltip on mouse move over chart container
+document.getElementById('chart-container').addEventListener('mousemove', function(e) {
+  // Simple hit-test: if cursor near a price line (zone) show tooltip
+  // We rely on the crosshair move event for this — just reposition tooltip
+  var tt = document.getElementById('zoneTooltip');
+  if (tt.classList.contains('visible')) {
+    tt.style.left = (e.clientX + 14) + 'px';
+    tt.style.top  = Math.max(10, e.clientY - 80) + 'px';
+  }
+});
+// ── checkAccess (nur für SD Zones) ──
+function checkAccess(uid, callback) {
+  if (!db) { callback(true, null); return; }
+  db.collection('apexUsers').doc(uid).get().then(function(doc) {
+    if (!doc.exists) { callback(false, 'No subscription found.'); return; }
+    var d = doc.data();
+    var active  = d.subscriptionActive === true;
+    var expiry  = d.subscriptionExpiry ? d.subscriptionExpiry.toDate() : null;
+    var expired = expiry ? expiry < new Date() : false;
+    if (active && !expired) callback(true, null);
+    else callback(false, expired ? 'Subscription expired.' : 'No active subscription.');
+  }).catch(function() { callback(true, null); });
+}
+
+var currentSymbol = 'XAUUSD';
+var currentTF     = 15;
+var isLoading     = false;
+
+// ── Boot: wird von nav('indicator') aufgerufen ──
+var sdz_initialized = false;
+
+function initSdZonesPage() {
+  if (!db) { setTimeout(initSdZonesPage, 300); return; }
+  if (sdz_initialized) {
+    if (lwChart) lwChart.timeScale().fitContent();
+    return;
+  }
+  sdz_initialized = true;
+
+  if (currentUID) {
+    checkAccess(currentUID, function(granted, msg) {
+      state.accessGranted = granted;
+      if (!granted) {
+        var lm = document.getElementById('lockedMsg');
+        var lo = document.getElementById('lockedOverlay');
+        if (lm) lm.textContent = msg || 'No active subscription.';
+        if (lo) lo.style.display = 'flex';
+      }
+      startApp();
+    });
+  } else {
+    state.accessGranted = false;
+    var lo = document.getElementById('lockedOverlay');
+    if (lo) lo.style.display = 'flex';
+    startApp();
+  }
+}
+
+function startApp() {
+  initChart();
+  loadData();
+  scheduleRefresh();
+}
+
+
+   
 </script>
 </body>
 </html>
