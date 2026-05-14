@@ -8712,8 +8712,13 @@ async function fetchYahoo(ticker, tf, limit) {
   var interval = TF_TO_YAHOO[tf] || '15m';
   var range = tf <= 5 ? '1d' : tf <= 60 ? '5d' : tf <= 240 ? '60d' : '1y';
   if (limit > 300 && tf <= 60) range = '60d';
-  var url = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(ticker) +
+
+  var yahooUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' +
+    encodeURIComponent(ticker) +
     '?interval=' + interval + '&range=' + range + '&includePrePost=false';
+
+  var url = 'https://jzindikators.4kjyyyftv6.workers.dev/?url=' + encodeURIComponent(yahooUrl);
+
   var r = await fetch(url);
   if (!r.ok) throw new Error('Yahoo HTTP ' + r.status);
   var j = await r.json();
@@ -8726,7 +8731,6 @@ async function fetchYahoo(ticker, tf, limit) {
     if (!ts[i] || !q.close[i]) continue;
     out.push({ time:ts[i], open:q.open[i]||q.close[i], high:q.high[i]||q.close[i], low:q.low[i]||q.close[i], close:q.close[i], volume:q.volume[i]||0 });
   }
-  // Sort & deduplicate by time
   out.sort(function(a,b){return a.time-b.time;});
   var deduped = [];
   var lastT = -1;
