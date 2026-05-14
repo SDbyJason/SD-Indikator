@@ -9525,7 +9525,7 @@ if (lwCandles) lwCandles.setData(chartData);
 
     // Update symbol info label
     var info = SYMBOL_MAP[sym];
-    if (info) document.getElementById('symbolInfo').textContent = info.label;
+    if (info) { var el = document.getElementById('symbolInfo'); if (el) el.textContent = info.label; }
 
   } catch(err) {
     console.error('SD Zones fetch error:', err);
