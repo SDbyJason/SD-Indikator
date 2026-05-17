@@ -11869,6 +11869,883 @@ var _analyseDebounce = null;
     }
   };
 })();
+// ═══════════════════════════════════════════════════════════════════
+//  APEX ULTRA — FEATURE PACK 2
+//  Einfügen direkt VOR: </script></body></html>
+//
+//  Feature 1 │ Daily Psych Check-In (Discipline + Confidence → Firestore)
+//  Feature 2 │ Chart Screenshot → AI Setup Grading (Gemini Vision)
+//  Feature 3 │ Weekly Intelligence Report (Cloudflare Cron)
+// ═══════════════════════════════════════════════════════════════════
+
+(function apexFeaturePack2() {
+  'use strict';
+
+  // ─────────────────────────────────────────────────────────────
+  //  Endpoints (nutzen dieselbe Worker-Domain)
+  // ─────────────────────────────────────────────────────────────
+  var GRADE_URL  = COACH_WORKER_URL + '/grade';
+  var WEEKLY_URL = COACH_WORKER_URL + '/weekly';
+
+  // ══════════════════════════════════════════════════════════════
+  //  CSS
+  // ══════════════════════════════════════════════════════════════
+  (function injectCSS() {
+    var s = document.createElement('style');
+    s.textContent = `
+
+/* ────────────────── PSYCH CHECK-IN ────────────────── */
+.pci-wrap {
+  background: linear-gradient(145deg,rgba(17,21,25,0.97),rgba(9,11,14,0.99));
+  border: 0.5px solid rgba(201,168,76,0.15);
+  border-radius: 16px;
+  padding: 1.4rem 1.5rem 1.2rem;
+  margin-top: 16px;
+  box-shadow: inset 0 1px 0 rgba(201,168,76,0.07), 0 4px 20px rgba(0,0,0,0.3);
+  position: relative; overflow: hidden;
+}
+.pci-wrap::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background: linear-gradient(90deg,transparent,rgba(201,168,76,0.5),transparent);
+}
+.pci-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:1rem;
+}
+.pci-title {
+  font-size:10px; font-weight:700; letter-spacing:0.15em;
+  text-transform:uppercase; color:var(--gold);
+  display:flex; align-items:center; gap:7px;
+}
+.pci-date { font-size:11px; color:var(--ink3); font-family:var(--font-mono); }
+.pci-sliders { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:14px; }
+.pci-slider-block { display:flex; flex-direction:column; gap:7px; }
+.pci-slider-label {
+  font-size:10px; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; color:var(--ink3);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.pci-slider-val {
+  font-family:var(--font-mono); font-size:13px; font-weight:600;
+  color: var(--gold);
+}
+.pci-range {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:4px; border-radius:2px;
+  background: linear-gradient(90deg, var(--gold) var(--pct,50%), var(--elevated) var(--pct,50%));
+  outline:none; cursor:pointer;
+}
+.pci-range::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:14px; height:14px; border-radius:50%;
+  background:var(--gold);
+  box-shadow: 0 0 6px rgba(201,168,76,0.6);
+  cursor:pointer; transition:transform 0.15s;
+}
+.pci-range::-webkit-slider-thumb:hover { transform:scale(1.25); }
+.pci-note-wrap { margin-bottom:14px; }
+.pci-note {
+  width:100%; background:var(--elevated); border:0.5px solid var(--rim2);
+  color:var(--ink); padding:9px 14px; border-radius:10px;
+  font-family:var(--font-body); font-size:12.5px; resize:none;
+  outline:none; transition:border-color 0.2s;
+  min-height:50px; max-height:100px;
+}
+.pci-note:focus { border-color:var(--gold); }
+.pci-note::placeholder { color:var(--ink3); }
+.pci-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.pci-save-btn {
+  padding:9px 22px; background:var(--gold); color:#080909;
+  border:none; border-radius:10px; font-family:var(--font-display);
+  font-size:11px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase;
+  cursor:pointer; transition:all 0.2s;
+}
+.pci-save-btn:hover { background:#dbbe62; transform:translateY(-1px); }
+.pci-save-btn:disabled { opacity:0.45; cursor:not-allowed; transform:none; }
+.pci-status { font-size:11px; color:var(--profit); font-weight:500; min-height:16px; }
+.pci-trend-wrap { margin-top:14px; padding-top:14px; border-top:0.5px solid var(--rim); }
+.pci-trend-title {
+  font-size:9.5px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--ink3); margin-bottom:10px;
+}
+.pci-trend-bars {
+  display:flex; gap:5px; align-items:flex-end; height:40px;
+}
+.pci-trend-day {
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+}
+.pci-trend-bar-wrap {
+  display:flex; gap:2px; align-items:flex-end; width:100%; height:32px;
+}
+.pci-trend-bar {
+  flex:1; border-radius:2px 2px 0 0;
+  min-height:2px; transition:height 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+.pci-trend-bar.disc { background:var(--gold); }
+.pci-trend-bar.conf { background:var(--info); }
+.pci-trend-day-label { font-size:8.5px; color:var(--ink3); font-family:var(--font-mono); }
+.pci-legend {
+  display:flex; gap:14px; margin-top:8px;
+  font-size:10px; color:var(--ink3);
+}
+.pci-legend span { display:flex; align-items:center; gap:4px; }
+.pci-legend-dot {
+  width:7px; height:7px; border-radius:50%;
+}
+
+/* ────────────────── CHART GRADE MODAL ────────────────── */
+#cgOverlay {
+  display:none; position:fixed; inset:0; z-index:8000;
+  background:rgba(0,0,0,0.82); backdrop-filter:blur(10px);
+  align-items:center; justify-content:center;
+}
+#cgOverlay.open { display:flex; }
+#cgModal {
+  background:linear-gradient(160deg,rgba(15,19,23,0.99),rgba(7,9,12,0.99));
+  border:0.5px solid rgba(201,168,76,0.35);
+  border-radius:20px; padding:0;
+  width:92%; max-width:560px;
+  box-shadow:0 40px 80px rgba(0,0,0,0.8), 0 0 0 0.5px rgba(201,168,76,0.08);
+  overflow:hidden; animation:cgRise 0.28s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes cgRise { from{opacity:0;transform:translateY(20px) scale(0.97)} to{opacity:1;transform:none} }
+#cgModalHead {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:1.1rem 1.5rem; border-bottom:0.5px solid rgba(201,168,76,0.12);
+  background:rgba(201,168,76,0.04);
+}
+#cgModalHead h3 {
+  font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--gold);
+  display:flex; align-items:center; gap:9px;
+}
+.cg-close-btn {
+  background:var(--elevated); border:0.5px solid var(--rim);
+  color:var(--ink2); width:30px; height:30px; border-radius:8px;
+  cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center;
+  transition:all 0.15s;
+}
+.cg-close-btn:hover { color:var(--loss); border-color:rgba(240,99,106,0.4); }
+#cgModalBody { padding:1.4rem 1.5rem; }
+.cg-upload-area {
+  border:1.5px dashed rgba(201,168,76,0.25); border-radius:14px;
+  padding:2rem; text-align:center; cursor:pointer;
+  transition:all 0.2s; margin-bottom:14px;
+  background:rgba(201,168,76,0.02);
+}
+.cg-upload-area:hover {
+  border-color:rgba(201,168,76,0.5);
+  background:rgba(201,168,76,0.05);
+}
+.cg-upload-area.has-img { padding:0.75rem; }
+.cg-upload-icon { font-size:32px; margin-bottom:10px; }
+.cg-upload-title { font-size:13px; font-weight:600; color:var(--ink); margin-bottom:5px; }
+.cg-upload-sub { font-size:11px; color:var(--ink3); }
+#cgPreviewImg {
+  max-width:100%; max-height:220px; border-radius:10px;
+  display:none; border:0.5px solid var(--rim);
+}
+.cg-context-wrap { margin-bottom:14px; }
+.cg-context-label {
+  font-size:9.5px; font-weight:700; letter-spacing:0.14em;
+  text-transform:uppercase; color:var(--ink3); margin-bottom:6px; display:block;
+}
+.cg-context-input {
+  width:100%; background:var(--elevated); border:0.5px solid var(--rim);
+  color:var(--ink); padding:9px 13px; border-radius:10px;
+  font-family:var(--font-body); font-size:12.5px; outline:none;
+  transition:border-color 0.2s;
+}
+.cg-context-input:focus { border-color:var(--gold); }
+.cg-context-input::placeholder { color:var(--ink3); }
+.cg-grade-btn {
+  width:100%; padding:12px; background:var(--gold); color:#080909;
+  border:none; border-radius:12px; font-family:var(--font-display);
+  font-size:13px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase;
+  cursor:pointer; transition:all 0.2s; margin-bottom:14px;
+}
+.cg-grade-btn:hover { background:#dbbe62; box-shadow:0 6px 20px rgba(201,168,76,0.35); }
+.cg-grade-btn:disabled { opacity:0.45; cursor:not-allowed; }
+#cgResultBox {
+  display:none;
+  background:var(--elevated); border:0.5px solid var(--rim2);
+  border-radius:12px; padding:1rem 1.2rem;
+  font-size:12.5px; line-height:1.75; color:var(--ink);
+  white-space:pre-wrap; max-height:320px; overflow-y:auto;
+}
+#cgResultBox.show { display:block; }
+.cg-grade-badge {
+  display:inline-block; padding:4px 14px; border-radius:6px;
+  font-family:var(--font-display); font-size:22px; font-weight:800;
+  margin-bottom:12px;
+}
+.cg-grade-badge.aplus2  { color:#3ecf8e; background:rgba(62,207,142,0.12); border:0.5px solid rgba(62,207,142,0.3); }
+.cg-grade-badge.aplus   { color:#3ecf8e; background:rgba(62,207,142,0.10); border:0.5px solid rgba(62,207,142,0.2); }
+.cg-grade-badge.a       { color:var(--gold); background:var(--gold-dim);    border:0.5px solid var(--gold-line); }
+.cg-grade-badge.b       { color:var(--caution); background:rgba(232,163,58,0.10); border:0.5px solid rgba(232,163,58,0.25); }
+.cg-grade-badge.c       { color:var(--loss);   background:var(--loss-dim);  border:0.5px solid rgba(240,99,106,0.25); }
+#cgSpinner {
+  display:none; align-items:center; justify-content:center; gap:10px;
+  padding:1.5rem; color:var(--ink3); font-size:12px;
+}
+#cgSpinner.show { display:flex; }
+.cg-spin {
+  width:18px; height:18px; border:2px solid rgba(201,168,76,0.2);
+  border-top-color:rgba(201,168,76,0.8); border-radius:50%;
+  animation:cgs 0.7s linear infinite;
+}
+@keyframes cgs { to { transform:rotate(360deg); } }
+
+/* ── Grade-Button in Coach / Journal ── */
+.cg-trigger-btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:7px 14px;
+  background:rgba(201,168,76,0.07); border:0.5px solid rgba(201,168,76,0.25);
+  color:var(--gold); border-radius:10px; font-size:11.5px; font-weight:600;
+  cursor:pointer; transition:all 0.18s; font-family:var(--font-body);
+}
+.cg-trigger-btn:hover {
+  background:rgba(201,168,76,0.14); border-color:rgba(201,168,76,0.5);
+  box-shadow:0 0 12px rgba(201,168,76,0.15);
+}
+
+/* ────────────────── WEEKLY REPORT ────────────────── */
+.wr-card {
+  background:linear-gradient(145deg,rgba(17,21,25,0.97),rgba(9,11,14,0.99));
+  border:0.5px solid rgba(91,155,213,0.2);
+  border-radius:16px; padding:1.4rem 1.5rem 1.2rem;
+  margin-top:16px; position:relative; overflow:hidden;
+  box-shadow: inset 0 1px 0 rgba(91,155,213,0.06), 0 4px 20px rgba(0,0,0,0.3);
+}
+.wr-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg,transparent,rgba(91,155,213,0.5),transparent);
+}
+.wr-header {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:1rem;
+}
+.wr-title {
+  font-size:10px; font-weight:700; letter-spacing:0.15em;
+  text-transform:uppercase; color:var(--info);
+  display:flex; align-items:center; gap:7px;
+}
+.wr-meta { font-size:10px; color:var(--ink3); font-family:var(--font-mono); }
+.wr-body {
+  font-size:12.5px; line-height:1.8; color:var(--ink2);
+  white-space:pre-wrap;
+}
+.wr-body .wr-section-header {
+  color:var(--ink); font-weight:600; font-size:12px;
+  letter-spacing:0.04em; display:block; margin-top:14px; margin-bottom:4px;
+}
+.wr-skeleton { display:flex; flex-direction:column; gap:8px; }
+.wr-skel-line {
+  height:12px; border-radius:4px;
+  background:linear-gradient(90deg,var(--elevated),var(--raised),var(--elevated));
+  background-size:200% 100%;
+  animation:wrSkel 1.4s ease-in-out infinite;
+}
+@keyframes wrSkel { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+
+/* ────────────────── Mobile adjustments ────────────────── */
+@media (max-width:700px) {
+  .pci-sliders { grid-template-columns:1fr; gap:12px; }
+  #cgModal { max-width:98vw; }
+}
+    `;
+    document.head.appendChild(s);
+  })();
+
+
+  // ══════════════════════════════════════════════════════════════
+  //  FEATURE 1 — DAILY PSYCH CHECK-IN
+  // ══════════════════════════════════════════════════════════════
+  (function initPsychCheckIn() {
+
+    var todayKey = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    var todayLabel = new Date().toLocaleDateString('de-DE', { weekday:'short', day:'numeric', month:'short' });
+    var psychLog = {}; // local cache of last 7 days from Firestore
+
+    // ── Inject HTML ──────────────────────────────────────────────
+    function injectCheckInCard() {
+      var page = document.getElementById('page-psychology');
+      if (!page || document.getElementById('pciCard')) return;
+
+      var card = document.createElement('div');
+      card.id = 'pciCard';
+      card.className = 'pci-wrap';
+      card.innerHTML = `
+        <div class="pci-header">
+          <div class="pci-title">🧠 Daily Mind Check-In</div>
+          <div class="pci-date" id="pciDate">${todayLabel}</div>
+        </div>
+        <div class="pci-sliders">
+          <div class="pci-slider-block">
+            <div class="pci-slider-label">
+              <span>Discipline</span>
+              <span class="pci-slider-val" id="pciDiscVal">5</span>
+            </div>
+            <input type="range" class="pci-range" id="pciDisc" min="1" max="10" value="5"
+              oninput="updatePciSlider('disc',this.value)">
+          </div>
+          <div class="pci-slider-block">
+            <div class="pci-slider-label">
+              <span>Confidence</span>
+              <span class="pci-slider-val" id="pciConfVal">5</span>
+            </div>
+            <input type="range" class="pci-range" id="pciConf" min="1" max="10" value="5"
+              oninput="updatePciSlider('conf',this.value)">
+          </div>
+        </div>
+        <div class="pci-note-wrap">
+          <textarea class="pci-note" id="pciNote"
+            placeholder="How are you feeling today? Any fears, distractions, or strong convictions?..."
+            rows="2"></textarea>
+        </div>
+        <div class="pci-footer">
+          <div class="pci-status" id="pciStatus"></div>
+          <button class="pci-save-btn" id="pciSaveBtn" onclick="savePsychCheckIn()">💾 Save Check-In</button>
+        </div>
+
+        <!-- 7-day trend bars -->
+        <div class="pci-trend-wrap">
+          <div class="pci-trend-title">7-Day Trend</div>
+          <div class="pci-trend-bars" id="pciTrendBars"></div>
+          <div class="pci-legend">
+            <span><span class="pci-legend-dot" style="background:var(--gold)"></span>Discipline</span>
+            <span><span class="pci-legend-dot" style="background:var(--info)"></span>Confidence</span>
+          </div>
+        </div>
+      `;
+      page.appendChild(card);
+
+      // Init slider gradient
+      updatePciSlider('disc', 5);
+      updatePciSlider('conf', 5);
+    }
+
+    // ── Slider gradient updater ──────────────────────────────────
+    window.updatePciSlider = function(type, val) {
+      val = parseInt(val);
+      var pct = ((val - 1) / 9 * 100).toFixed(1) + '%';
+      if (type === 'disc') {
+        var el = document.getElementById('pciDisc');
+        var vEl = document.getElementById('pciDiscVal');
+        if (el) el.style.setProperty('--pct', pct);
+        if (vEl) {
+          vEl.textContent = val;
+          vEl.style.color = val >= 7 ? 'var(--profit)' : val >= 4 ? 'var(--gold)' : 'var(--loss)';
+        }
+      } else {
+        var el2 = document.getElementById('pciConf');
+        var vEl2 = document.getElementById('pciConfVal');
+        if (el2) el2.style.setProperty('--pct', pct);
+        if (vEl2) {
+          vEl2.textContent = val;
+          vEl2.style.color = val >= 7 ? 'var(--info)' : val >= 4 ? 'var(--gold)' : 'var(--loss)';
+        }
+      }
+    };
+
+    // ── Load today's saved data ──────────────────────────────────
+    async function loadTodayPsych() {
+      if (!db || !currentUID) return;
+      try {
+        var doc = await db.collection('apexUsers').doc(currentUID)
+          .collection('psychLog').doc(todayKey).get();
+        if (doc.exists) {
+          var d = doc.data();
+          var discEl = document.getElementById('pciDisc');
+          var confEl = document.getElementById('pciConf');
+          var noteEl = document.getElementById('pciNote');
+          if (discEl) { discEl.value = d.discipline || 5; updatePciSlider('disc', d.discipline || 5); }
+          if (confEl) { confEl.value = d.confidence || 5; updatePciSlider('conf', d.confidence || 5); }
+          if (noteEl)  noteEl.value = d.note || '';
+          setPciStatus('✓ Check-in bereits gespeichert', true);
+        }
+      } catch(e) { console.warn('PCI load error:', e); }
+    }
+
+    // ── Load 7-day trend ─────────────────────────────────────────
+    async function loadPsychTrend() {
+      if (!db || !currentUID) return;
+      try {
+        var snapshot = await db.collection('apexUsers').doc(currentUID)
+          .collection('psychLog').orderBy('timestamp', 'desc').limit(7).get();
+        psychLog = {};
+        snapshot.forEach(function(doc) { psychLog[doc.id] = doc.data(); });
+        renderTrendBars();
+      } catch(e) { console.warn('PCI trend load error:', e); }
+    }
+
+    function renderTrendBars() {
+      var container = document.getElementById('pciTrendBars');
+      if (!container) return;
+      container.innerHTML = '';
+
+      // Build array of last 7 days (newest on right)
+      var days = [];
+      for (var i = 6; i >= 0; i--) {
+        var d = new Date();
+        d.setDate(d.getDate() - i);
+        var key = d.toISOString().slice(0, 10);
+        var label = d.toLocaleDateString('de-DE', { weekday:'short' }).slice(0,2);
+        days.push({ key: key, label: label, data: psychLog[key] || null });
+      }
+
+      days.forEach(function(day) {
+        var discH = day.data ? Math.round((day.data.discipline / 10) * 28) : 2;
+        var confH = day.data ? Math.round((day.data.confidence / 10) * 28) : 2;
+        var dayDiv = document.createElement('div');
+        dayDiv.className = 'pci-trend-day';
+        dayDiv.title = day.data
+          ? 'Discipline: ' + day.data.discipline + '/10\nConfidence: ' + day.data.confidence + '/10'
+          : 'No data';
+        dayDiv.innerHTML =
+          '<div class="pci-trend-bar-wrap">' +
+            '<div class="pci-trend-bar disc" style="height:' + discH + 'px"></div>' +
+            '<div class="pci-trend-bar conf" style="height:' + confH + 'px"></div>' +
+          '</div>' +
+          '<div class="pci-trend-day-label">' + day.label + '</div>';
+        container.appendChild(dayDiv);
+      });
+    }
+
+    // ── Save Check-In ────────────────────────────────────────────
+    window.savePsychCheckIn = async function() {
+      if (!db || !currentUID) { setPciStatus('⚠ Not logged in', false); return; }
+      var discEl = document.getElementById('pciDisc');
+      var confEl = document.getElementById('pciConf');
+      var noteEl = document.getElementById('pciNote');
+      var btn    = document.getElementById('pciSaveBtn');
+      if (!discEl || !confEl) return;
+
+      btn.disabled = true;
+      var data = {
+        discipline:  parseInt(discEl.value),
+        confidence:  parseInt(confEl.value),
+        note:        noteEl ? noteEl.value.trim() : '',
+        timestamp:   firebase.firestore.FieldValue.serverTimestamp(),
+        date:        todayKey
+      };
+
+      try {
+        await db.collection('apexUsers').doc(currentUID)
+          .collection('psychLog').doc(todayKey).set(data);
+        psychLog[todayKey] = data;
+        renderTrendBars();
+        setPciStatus('✓ Gespeichert — ' + todayLabel, true);
+
+        // ── Patch coach context to include psych data ──────────
+        patchCoachContextWithPsych();
+      } catch(e) {
+        setPciStatus('⚠ Fehler: ' + e.message, false);
+      }
+      btn.disabled = false;
+    };
+
+    function setPciStatus(msg, ok) {
+      var el = document.getElementById('pciStatus');
+      if (!el) return;
+      el.textContent = msg;
+      el.style.color = ok ? 'var(--profit)' : 'var(--loss)';
+      setTimeout(function() { if (el.textContent === msg) el.textContent = ''; }, 3500);
+    }
+
+    // ── Patch buildCoachContext ───────────────────────────────────
+    function patchCoachContextWithPsych() {
+      var _origBuildCoachContext = window.buildCoachContext;
+      window.buildCoachContext = function() {
+        var base = _origBuildCoachContext ? _origBuildCoachContext() : '';
+        if (!psychLog || Object.keys(psychLog).length === 0) return base;
+
+        var entries = Object.keys(psychLog).sort().slice(-7);
+        var avgDisc = 0, avgConf = 0;
+        var logLines = entries.map(function(k) {
+          var d = psychLog[k];
+          avgDisc += d.discipline || 5;
+          avgConf += d.confidence || 5;
+          return k + ' → Discipline: ' + (d.discipline || '?') + '/10, Confidence: ' + (d.confidence || '?') + '/10' +
+            (d.note ? ' | Note: "' + d.note + '"' : '');
+        });
+        avgDisc = (avgDisc / entries.length).toFixed(1);
+        avgConf = (avgConf / entries.length).toFixed(1);
+
+        var psychSection = '\nPSYCH LOG (last ' + entries.length + ' days):\n' +
+          logLines.join('\n') + '\n' +
+          '- 7-day avg Discipline: ' + avgDisc + '/10\n' +
+          '- 7-day avg Confidence: ' + avgConf + '/10\n';
+        return base + psychSection;
+      };
+    }
+
+    // Also patch sendCoachMsg to always include latest psych data in context
+    (function patchSendCoachMsgForPsych() {
+      var _origSend = window.sendCoachMsg;
+      window.sendCoachMsg = async function(isManual) {
+        // re-load psych data silently before sending
+        if (db && currentUID && Object.keys(psychLog).length === 0) {
+          await loadPsychTrend();
+        }
+        patchCoachContextWithPsych();
+        return _origSend.apply(this, arguments);
+      };
+    })();
+
+    // Add quick psych coach buttons to existing coach
+    function injectPsychCoachButtons() {
+      var quickBtns = document.getElementById('coachQuickBtns');
+      if (!quickBtns || document.getElementById('coachPsychBtn')) return;
+      var btn1 = document.createElement('button');
+      btn1.id = 'coachPsychBtn';
+      btn1.className = 'coach-quick-btn';
+      btn1.innerHTML = '🧠 My mental patterns';
+      btn1.onclick = function() {
+        window.coachQuick('Analyse my psychology data — what patterns do you see between my discipline/confidence ratings and my trading results? What is the correlation?');
+      };
+      var btn2 = document.createElement('button');
+      btn2.className = 'coach-quick-btn';
+      btn2.innerHTML = '📈 Optimal mindset days';
+      btn2.onclick = function() {
+        window.coachQuick('On which days did I have the highest discipline and confidence scores, and how did those sessions perform compared to low-score days?');
+      };
+      quickBtns.appendChild(btn1);
+      quickBtns.appendChild(btn2);
+    }
+
+    // ── Init: delay until shell is visible ──────────────────────
+    var _initAttempts = 0;
+    function tryInit() {
+      if (_initAttempts++ > 30) return;
+      if (!document.getElementById('page-psychology') || !window.db || !window.currentUID) {
+        setTimeout(tryInit, 1200);
+        return;
+      }
+      injectCheckInCard();
+      injectPsychCoachButtons();
+      loadTodayPsych();
+      loadPsychTrend();
+    }
+    setTimeout(tryInit, 3000);
+
+  })(); // END PSYCH CHECK-IN
+
+
+  // ══════════════════════════════════════════════════════════════
+  //  FEATURE 2 — CHART SCREENSHOT → AI SETUP GRADING
+  // ══════════════════════════════════════════════════════════════
+  (function initChartGrading() {
+
+    var _gradeImageBase64 = null;
+    var _gradeMimeType    = 'image/jpeg';
+
+    // ── Modal HTML ───────────────────────────────────────────────
+    function injectGradeModal() {
+      if (document.getElementById('cgOverlay')) return;
+      var overlay = document.createElement('div');
+      overlay.id = 'cgOverlay';
+      overlay.innerHTML = `
+        <div id="cgModal">
+          <div id="cgModalHead">
+            <h3>📸 AI Setup Grader</h3>
+            <button class="cg-close-btn" onclick="closeChartGrade()">✕</button>
+          </div>
+          <div id="cgModalBody">
+            <div class="cg-upload-area" id="cgDropZone"
+              onclick="document.getElementById('cgFileInput').click()"
+              ondragover="event.preventDefault();this.style.borderColor='rgba(201,168,76,0.7)'"
+              ondragleave="this.style.borderColor=''"
+              ondrop="handleChartDrop(event)">
+              <div id="cgDropContent">
+                <div class="cg-upload-icon">📊</div>
+                <div class="cg-upload-title">Drop your chart screenshot here</div>
+                <div class="cg-upload-sub">or click to upload — JPG, PNG, WebP</div>
+              </div>
+              <img id="cgPreviewImg" alt="Chart preview">
+            </div>
+            <input type="file" id="cgFileInput" accept="image/*" style="display:none"
+              onchange="handleChartFileSelect(event)">
+
+            <div class="cg-context-wrap">
+              <label class="cg-context-label">Setup Context (optional)</label>
+              <input class="cg-context-input" id="cgContext"
+                placeholder="e.g. XAUUSD H4, Supply zone, London session, BOS above...">
+            </div>
+
+            <button class="cg-grade-btn" id="cgGradeBtn"
+              onclick="runChartGrade()" disabled>
+              🔍 Grade This Setup
+            </button>
+
+            <div id="cgSpinner">
+              <div class="cg-spin"></div>
+              <span>Gemini Vision is analysing your chart...</span>
+            </div>
+
+            <div id="cgResultBox"></div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // ── Open / Close ─────────────────────────────────────────────
+    window.openChartGrade = function() {
+      var overlay = document.getElementById('cgOverlay');
+      if (overlay) overlay.classList.add('open');
+    };
+    window.closeChartGrade = function() {
+      var overlay = document.getElementById('cgOverlay');
+      if (overlay) overlay.classList.remove('open');
+    };
+    window.handleChartDrop = function(e) {
+      e.preventDefault();
+      var zone = document.getElementById('cgDropZone');
+      if (zone) zone.style.borderColor = '';
+      var file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) processChartFile(file);
+    };
+    window.handleChartFileSelect = function(e) {
+      var file = e.target.files[0];
+      if (file) processChartFile(file);
+    };
+
+    function processChartFile(file) {
+      _gradeMimeType = file.type || 'image/jpeg';
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var result = ev.target.result;
+        // Strip the data:... prefix to get pure base64
+        _gradeImageBase64 = result.split(',')[1];
+
+        // Show preview
+        var img      = document.getElementById('cgPreviewImg');
+        var zone     = document.getElementById('cgDropZone');
+        var content  = document.getElementById('cgDropContent');
+        var gradeBtn = document.getElementById('cgGradeBtn');
+        if (img)      { img.src = result; img.style.display = 'block'; }
+        if (zone)     zone.classList.add('has-img');
+        if (content)  content.style.display = 'none';
+        if (gradeBtn) gradeBtn.disabled = false;
+
+        // Clear previous result
+        var resultBox = document.getElementById('cgResultBox');
+        if (resultBox) { resultBox.className = ''; resultBox.innerHTML = ''; }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ── Grade API call ────────────────────────────────────────────
+    window.runChartGrade = async function() {
+      if (!_gradeImageBase64) return;
+      var btn      = document.getElementById('cgGradeBtn');
+      var spinner  = document.getElementById('cgSpinner');
+      var resultBox= document.getElementById('cgResultBox');
+      var context  = (document.getElementById('cgContext') || {}).value || '';
+
+      if (btn)     btn.disabled = true;
+      if (spinner) spinner.classList.add('show');
+      if (resultBox){ resultBox.className = ''; resultBox.innerHTML = ''; }
+
+      try {
+        var res = await fetch(GRADE_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: _gradeImageBase64,
+            mimeType:    _gradeMimeType,
+            context:     context.trim()
+          })
+        });
+
+        var data = await res.json();
+
+        if (data.error) {
+          renderGradeResult('⚠ Error: ' + data.error, null);
+        } else {
+          renderGradeResult(data.result || 'No analysis returned.', data.result);
+        }
+      } catch(e) {
+        renderGradeResult('⚠ Connection error: ' + e.message, null);
+      }
+
+      if (spinner) spinner.classList.remove('show');
+      if (btn)     btn.disabled = false;
+    };
+
+    function renderGradeResult(text, raw) {
+      var resultBox = document.getElementById('cgResultBox');
+      if (!resultBox) return;
+      resultBox.className = 'show';
+
+      // Extract grade letter from text
+      var gradeMatch = text.match(/^GRADE:\s*([A-C][+]{0,2})/m);
+      var grade = gradeMatch ? gradeMatch[1] : null;
+      var gradeClass = '';
+      if (grade === 'A++') gradeClass = 'aplus2';
+      else if (grade === 'A+') gradeClass = 'aplus';
+      else if (grade === 'A')  gradeClass = 'a';
+      else if (grade === 'B')  gradeClass = 'b';
+      else if (grade === 'C')  gradeClass = 'c';
+
+      var html = '';
+      if (grade) {
+        html += '<div class="cg-grade-badge ' + gradeClass + '">' + grade + '</div>';
+      }
+
+      // Format section headers
+      var formatted = text.replace(/^GRADE:.*$/m, '').trim()
+        .replace(/^(SCORE BREAKDOWN|STRENGTHS|WEAKNESSES|ONE THING TO IMPROVE):?/gm,
+          '<strong style="color:var(--gold);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;display:block;margin-top:12px;margin-bottom:4px">$1</strong>');
+
+      html += '<div style="font-size:12px;line-height:1.8;color:var(--ink2)">' + formatted + '</div>';
+      resultBox.innerHTML = html;
+    }
+
+    // ── Inject trigger buttons ────────────────────────────────────
+    function injectGradeTriggers() {
+      // Button in Coach Active area (below quick buttons)
+      var quickBtns = document.getElementById('coachQuickBtns');
+      if (quickBtns && !document.getElementById('cgCoachTrigger')) {
+        var wrap = document.createElement('div');
+        wrap.style.cssText = 'margin-top:10px;padding-top:10px;border-top:0.5px solid var(--rim)';
+        var btn = document.createElement('button');
+        btn.id = 'cgCoachTrigger';
+        btn.className = 'cg-trigger-btn';
+        btn.innerHTML = '📸 Grade My Chart Setup';
+        btn.onclick = window.openChartGrade;
+        wrap.appendChild(btn);
+        quickBtns.parentNode.insertBefore(wrap, quickBtns.nextSibling);
+      }
+
+      // Button in Insights page
+      var insightsPage = document.getElementById('page-insights');
+      if (insightsPage && !document.getElementById('cgInsightTrigger')) {
+        var insightBtn = document.createElement('button');
+        insightBtn.id = 'cgInsightTrigger';
+        insightBtn.className = 'cg-trigger-btn';
+        insightBtn.innerHTML = '📸 Grade a Chart Setup with AI';
+        insightBtn.style.cssText = 'margin-top:16px;margin-bottom:16px;font-size:12px;padding:10px 20px';
+        insightBtn.onclick = window.openChartGrade;
+        // Insert before the AI Observations card
+        var feedCard = insightsPage.querySelector('.glass-card');
+        if (feedCard) insightsPage.insertBefore(insightBtn, feedCard);
+        else insightsPage.appendChild(insightBtn);
+      }
+    }
+
+    // ── Init ─────────────────────────────────────────────────────
+    function tryInit() {
+      injectGradeModal();
+      injectGradeTriggers();
+      if (!document.getElementById('cgCoachTrigger')) {
+        setTimeout(tryInit, 1500);
+      }
+    }
+    setTimeout(tryInit, 3000);
+
+  })(); // END CHART GRADING
+
+
+  // ══════════════════════════════════════════════════════════════
+  //  FEATURE 3 — WEEKLY INTELLIGENCE REPORT (Cron)
+  // ══════════════════════════════════════════════════════════════
+  (function initWeeklyReport() {
+
+    var _reportLoaded = false;
+
+    // ── Inject card into Insights page ───────────────────────────
+    function injectReportCard() {
+      var insightsPage = document.getElementById('page-insights');
+      if (!insightsPage || document.getElementById('wrCard')) return;
+
+      var card = document.createElement('div');
+      card.id  = 'wrCard';
+      card.className = 'wr-card';
+      card.innerHTML = `
+        <div class="wr-header">
+          <div class="wr-title">📅 Weekly Intelligence Report</div>
+          <div class="wr-meta" id="wrMeta">Loading...</div>
+        </div>
+        <div class="wr-body" id="wrBody">
+          <div class="wr-skeleton">
+            <div class="wr-skel-line" style="width:85%"></div>
+            <div class="wr-skel-line" style="width:70%"></div>
+            <div class="wr-skel-line" style="width:90%"></div>
+            <div class="wr-skel-line" style="width:60%"></div>
+            <div class="wr-skel-line" style="width:78%"></div>
+          </div>
+        </div>
+      `;
+      // Insert at the top of insights page (after the header)
+      var ph = insightsPage.querySelector('.ph');
+      if (ph) ph.insertAdjacentElement('afterend', card);
+      else insightsPage.prepend(card);
+
+      loadWeeklyReport();
+    }
+
+    // ── Load from Worker (which reads from KV) ───────────────────
+    async function loadWeeklyReport() {
+      if (_reportLoaded) return;
+      try {
+        var res  = await fetch(WEEKLY_URL, { method: 'GET' });
+        var data = await res.json();
+
+        var body = document.getElementById('wrBody');
+        var meta = document.getElementById('wrMeta');
+        if (!body) return;
+
+        if (!data || !data.report) {
+          body.textContent = 'The weekly report will be generated automatically every Monday at 07:00 UTC by the Cloudflare Cron.\n\nMake sure you have:\n1. Set up the APEX_KV binding in Cloudflare Workers\n2. Added the Cron trigger (0 7 * * 1) in wrangler.toml\n3. Deployed the updated Worker';
+          if (meta) meta.textContent = 'Not yet generated';
+          _reportLoaded = true;
+          return;
+        }
+
+        // Format the report: CAPS section headers get styled
+        var formatted = data.report.replace(
+          /^([A-Z][A-Z &\/\-—]+)$/gm,
+          '<span class="wr-section-header">$1</span>'
+        );
+        body.innerHTML = formatted;
+
+        if (meta && data.generatedAt) {
+          var d = new Date(data.generatedAt);
+          meta.textContent = 'Week ' + data.week + ' · Generated ' +
+            d.toLocaleDateString('de-DE', { weekday:'short', day:'numeric', month:'short' });
+        }
+        _reportLoaded = true;
+
+      } catch(e) {
+        var body2 = document.getElementById('wrBody');
+        if (body2) body2.textContent = '⚠ Could not load report: ' + e.message;
+        _reportLoaded = true;
+      }
+    }
+
+    // Reload report when user navigates to insights page
+    var _origShowPage = window.showPage;
+    window.showPage = function(page) {
+      if (_origShowPage) _origShowPage.apply(this, arguments);
+      if (page === 'insights' && !_reportLoaded) {
+        setTimeout(loadWeeklyReport, 500);
+      }
+    };
+
+    // ── Init ─────────────────────────────────────────────────────
+    function tryInit() {
+      if (!document.getElementById('page-insights')) {
+        setTimeout(tryInit, 1500);
+        return;
+      }
+      injectReportCard();
+    }
+    setTimeout(tryInit, 3500);
+
+  })(); // END WEEKLY REPORT
+
+})(); // END APEX FEATURE PACK 2
 </script>
 </body>
 </html>
