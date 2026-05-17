@@ -11271,7 +11271,12 @@ function buildCoachContext() {
 }
 
 async function sendCoachMsg() {
+  // Wenn der Coach beschäftigt ist ODER wegen des Limits blockiert wird, sofort abbrechen!
   if (coachBusy) return;
+  if (window.coachCooldownActive) {
+    console.log("Coach blockiert: Cooldown aktiv.");
+    return;
+  }
 
   if (typeof coachMessages === 'undefined') {
     window.coachMessages = [];
@@ -11288,8 +11293,7 @@ async function sendCoachMsg() {
 
   coachMessages.push({ role: 'user', content: text });
 
-  // NEU: Wenn die Historie zu lang wird, löschen wir die ältesten Nachrichten.
-  // Das verhindert, dass die Nachricht zu groß für das kostenlose Limit wird!
+  // Historie kurz halten, um Token-Stau zu vermeiden
   if (coachMessages.length > 10) {
     coachMessages = coachMessages.slice(-10);
   }
@@ -11321,72 +11325,27 @@ async function sendCoachMsg() {
       reply = '🤖 Fehler: Unerwartetes Format vom Server.';
     }
 
+    // Wenn die Antwort die Quota-Warnung enthält, aktivieren wir den Notaus-Schalter!
+    if (reply.includes("Quota exceeded") || reply.includes("Limit erreicht")) {
+      window.coachCooldownActive = true;
+      setTimeout(function() {
+        window.coachCooldownActive = false;
+        appendCoachMsg('coach', '🟢 System: Das Limit wurde zurückgesetzt. Du kannst den Coach wieder nutzen.');
+      }, 60000); // 60 Sekunden absolute Sperre
+    }
+
     coachMessages.push({ role: 'assistant', content: reply });
     appendCoachMsg('coach', reply);
 
   } catch(e) {
     console.error("Coach-Fehler:", e);
-    appendCoachMsg('coach', '⚠ Fehler bei der Verbindung:\n' + e.message);
-  }
-
-  setCoachBusy(false);
-}async function sendCoachMsg() {
-  if (coachBusy) return;
-
-  if (typeof coachMessages === 'undefined') {
-    window.coachMessages = [];
-  }
-
-  var input = document.getElementById('coachInput');
-  if (!input) return;
-  var text = input.value.trim();
-  if (!text) return;
-
-  appendCoachMsg('user', text);
-  input.value = '';
-  setCoachBusy(true);
-
-  coachMessages.push({ role: 'user', content: text });
-
-  // NEU: Wenn die Historie zu lang wird, löschen wir die ältesten Nachrichten.
-  // Das verhindert, dass die Nachricht zu groß für das kostenlose Limit wird!
-  if (coachMessages.length > 10) {
-    coachMessages = coachMessages.slice(-10);
-  }
-
-  try {
-    var res = await fetch(COACH_WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        uid: currentUser ? currentUser.uid : 'guest',
-        system: "Trading Coach",
-        messages: coachMessages
-      })
-    });
-
-    if (!res.ok) {
-      var errData = await res.json().catch(() => ({}));
-      throw new Error(errData.error || 'Server-Fehler (Status ' + res.status + ')');
-    }
-
-    var data = await res.json();
+    var errMsg = e.message;
     
-    var reply = '';
-    if (data.response) {
-      reply = data.response; 
-    } else if (data.choices && data.choices[0] && data.choices[0].message) {
-      reply = data.choices[0].message.content; 
-    } else {
-      reply = '🤖 Fehler: Unerwartetes Format vom Server.';
-    }
+    appendCoachMsg('coach', '⚠ Fehler bei der Verbindung:\n' + errMsg);
 
-    coachMessages.push({ role: 'assistant', content: reply });
-    appendCoachMsg('coach', reply);
-
-  } catch(e) {
-    console.error("Coach-Fehler:", e);
-    appendCoachMsg('coach', '⚠ Fehler bei der Verbindung:\n' + e.message);
+    // Auch bei Netzwerkfehlern triggern wir zur Sicherheit eine kurze Pause
+    window.coachCooldownActive = true;
+    setTimeout(function() { window.coachCooldownActive = false; }, 10000);
   }
 
   setCoachBusy(false);
