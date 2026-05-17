@@ -11287,42 +11287,93 @@ async function sendCoachMsg(isManual) {
   var text = input.value.trim();
   if (!text) return;
 
-  // 1. Text des Users ganz normal im Chat anzeigen
+  // 1. Text des Users im Chat anzeigen
   appendCoachMsg('user', text);
   input.value = '';
   setCoachBusy(true);
   window.coachLocalCooldown = true;
 
-  // 2. LIVE-DATEN AUS DEINER FIREBASE REALTIME DATABASE AUSLESEN
-  var firebaseContext = "HINTERGRUND-INFOS ZUM TRADER (LIVE AUS FIREBASE):\n";
-  
-  if (typeof userTradingData !== 'undefined' && userTradingData) {
-    firebaseContext += "- Aktueller Kontostand: " + (userTradingData.balance !== undefined ? userTradingData.balance : "0") + "€\n";
-    firebaseContext += "- Gesamt-Gewinne (Win): " + (userTradingData.win !== undefined ? userTradingData.win : "0") + "€\n";
-    firebaseContext += "- Gesamt-Verluste (Loss): " + (userTradingData.loss !== undefined ? userTradingData.loss : "0") + "€\n";
-    
-    // Wenn Trades vorhanden sind, hängen wir die letzten 3 Trades für den Kontext an
-    if (userTradingData.trades) {
-      try {
-        var tradesArray = Object.values(userTradingData.trades);
-        var lastTrades = tradesArray.slice(-3); // Die letzten 3 Trades
-        firebaseContext += "- Letzte Trades: " + JSON.stringify(lastTrades) + "\n";
-      } catch(e) {
-        firebaseContext += "- Trades konnten nicht formatiert werden.\n";
+  // 2. LIVE-DATEN aus journalData + den globalen Hilfsfunktionen auslesen
+  //    (Das sind die echten Firestore-Daten dieser App — es gibt keine Realtime DB)
+  var firebaseContext = "HINTERGRUND-INFOS ZUM TRADER (LIVE AUS FIRESTORE):\n";
+
+  try {
+    var allTrades = getAllTrades(); // alle Trades aus journalData (global verfügbar)
+
+    if (allTrades.length > 0) {
+      var valid   = allTrades.filter(function(t) { return t.pips !== '' && t.pips !== undefined; });
+      var wins    = valid.filter(function(t) { return parseFloat(t.pips) > 0; });
+      var losses  = valid.filter(function(t) { return parseFloat(t.pips) < 0; });
+      var wr      = valid.length ? Math.round(wins.length / valid.length * 100) : 0;
+      var netPips = valid.reduce(function(a, t) { return a + parseFloat(t.pips || 0); }, 0);
+
+      firebaseContext += "- Trader: " + (currentName || 'Unbekannt') + "\n";
+      firebaseContext += "- Plan: " + (currentPlan || 'free') + "\n";
+      firebaseContext += "- Gesamt-Trades: " + allTrades.length + "\n";
+      firebaseContext += "- Trades mit Pips-Daten: " + valid.length + "\n";
+      firebaseContext += "- Wins: " + wins.length + " | Losses: " + losses.length + "\n";
+      firebaseContext += "- Win-Rate: " + wr + "%\n";
+      firebaseContext += "- Net Pips gesamt: " + netPips.toFixed(1) + "\n";
+
+      // Setup-Breakdown
+      var setups = {};
+      allTrades.forEach(function(t) {
+        if (t.setup) {
+          if (!setups[t.setup]) setups[t.setup] = { total: 0, wins: 0 };
+          setups[t.setup].total++;
+          if (parseFloat(t.pips || 0) > 0) setups[t.setup].wins++;
+        }
+      });
+      if (Object.keys(setups).length > 0) {
+        firebaseContext += "- Setup-Performance: " + JSON.stringify(setups) + "\n";
       }
+
+      // Session-Breakdown
+      var sessions = {};
+      allTrades.forEach(function(t) {
+        if (t.session) {
+          if (!sessions[t.session]) sessions[t.session] = { total: 0, wins: 0 };
+          sessions[t.session].total++;
+          if (parseFloat(t.pips || 0) > 0) sessions[t.session].wins++;
+        }
+      });
+      if (Object.keys(sessions).length > 0) {
+        firebaseContext += "- Session-Performance: " + JSON.stringify(sessions) + "\n";
+      }
+
+      // Häufigste Fehler
+      var mistakes = {};
+      allTrades.forEach(function(t) {
+        (t.mistakes || []).forEach(function(m) {
+          mistakes[m] = (mistakes[m] || 0) + 1;
+        });
+      });
+      if (Object.keys(mistakes).length > 0) {
+        firebaseContext += "- Häufige Fehler: " + JSON.stringify(mistakes) + "\n";
+      }
+
+      // Letzte 5 Trades
+      var recent = allTrades.slice(-5).map(function(t) {
+        return (t._date || t.date || '') + ' ' + (t.symbol || '?') + ' ' +
+               (t.dir || '') + ' ' + (t.pips || '?') + ' pips [' +
+               (t.setup || 'kein Setup') + ']';
+      });
+      firebaseContext += "- Letzte 5 Trades: " + recent.join(' | ') + "\n";
+
     } else {
-      firebaseContext += "- Noch keine Trades in der Historie.\n";
+      firebaseContext += "- Noch keine Trades im Journal vorhanden.\n";
+      firebaseContext += "- Trader: " + (currentName || 'Unbekannt') + "\n";
     }
-  } else {
-    firebaseContext += "- Keine Live-Daten verfügbar (User-Datenobjekt nicht im Speicher).\n";
+  } catch(e) {
+    console.warn("Coach: Fehler beim Aufbereiten der Journaldaten:", e);
+    firebaseContext += "- Journaldaten konnten nicht ausgelesen werden.\n";
   }
 
-  // Wir bauen den Prompt für Gemini zusammen (für den User im Chatfenster unsichtbar)
+  // 3. Prompt für die KI zusammenbauen (im Chat unsichtbar)
   var promptForAi = firebaseContext + "\nFrage des Traders: " + text;
 
-  // Mit Kontext in die Historie pushen
+  // In die Historie pushen
   coachMessages.push({ role: 'user', content: promptForAi });
-
   if (coachMessages.length > 8) { coachMessages = coachMessages.slice(-8); }
 
   try {
@@ -11342,12 +11393,12 @@ async function sendCoachMsg(isManual) {
     }
 
     var data = await res.json();
-    
+
     var reply = '';
     if (data.response) {
-      reply = data.response; 
+      reply = data.response;
     } else if (data.choices && data.choices[0] && data.choices[0].message) {
-      reply = data.choices[0].message.content; 
+      reply = data.choices[0].message.content;
     } else {
       reply = '🤖 Fehler: Unerwartetes Format vom Server.';
     }
@@ -11370,7 +11421,7 @@ async function sendCoachMsg(isManual) {
 
   setTimeout(function() {
     window.coachLocalCooldown = false;
-  }, 10000); 
+  }, 10000);
 }
 
 function coachQuick(text) {
