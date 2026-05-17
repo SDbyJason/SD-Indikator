@@ -11189,6 +11189,7 @@ var COACH_WORKER_URL = 'https://spring-fire-06a2.4kjyyyftv6.workers.dev';
 
 var coachHistory = []; // {role, content}
 var coachBusy    = false;
+var coachMessages = [];
 
 function initCoach() {
   var locked = document.getElementById('coachLocked');
@@ -11198,7 +11199,6 @@ function initCoach() {
   if (currentPlan === 'pro') {
     locked.style.display = 'none';
     active.style.display  = 'block';
-    // Personalise the greeting
     var chat = document.getElementById('coachChat');
     if (chat && currentName) {
       var bubble = chat.querySelector('.coach-msg-bubble');
@@ -11212,20 +11212,16 @@ function initCoach() {
 }
 
 function buildCoachContext() {
-  // Summarise journal data for the AI
   var allTrades = [];
   Object.entries(journalData).forEach(function([date, day]) {
     (day.trades || []).forEach(function(t) {
       allTrades.push(Object.assign({}, t, { date: date }));
     });
   });
-
   var valid = allTrades.filter(function(t) { return t.pips !== '' && t.pips !== undefined; });
   var wins  = valid.filter(function(t) { return parseFloat(t.pips) > 0; });
   var wr    = valid.length ? Math.round(wins.length / valid.length * 100) : 0;
   var netPips = valid.reduce(function(a, t) { return a + parseFloat(t.pips || 0); }, 0);
-
-  // Setup breakdown
   var setups = {};
   allTrades.forEach(function(t) {
     if (t.setup) {
@@ -11234,8 +11230,6 @@ function buildCoachContext() {
       if (parseFloat(t.pips) > 0) setups[t.setup].wins++;
     }
   });
-
-  // Session breakdown
   var sessions = {};
   allTrades.forEach(function(t) {
     if (t.session) {
@@ -11244,20 +11238,13 @@ function buildCoachContext() {
       if (parseFloat(t.pips) > 0) sessions[t.session].wins++;
     }
   });
-
-  // Mistakes
   var mistakes = {};
   allTrades.forEach(function(t) {
-    (t.mistakes || []).forEach(function(m) {
-      mistakes[m] = (mistakes[m] || 0) + 1;
-    });
+    (t.mistakes || []).forEach(function(m) { mistakes[m] = (mistakes[m] || 0) + 1; });
   });
-
-  // Last 5 trades for context
   var recent = allTrades.slice(-5).map(function(t) {
     return (t.date || '') + ' ' + (t.symbol || '') + ' ' + (t.dir || '') + ' ' + (t.pips || '?') + ' pips [' + (t.setup || 'no setup') + ']';
   });
-
   return [
     'TRADER: ' + (currentName || 'Unknown'),
     'TOTAL TRADES: ' + allTrades.length,
@@ -11270,15 +11257,79 @@ function buildCoachContext() {
   ].join('\n');
 }
 
+// ── Cooldown-Timer-State ──────────────────────────────────────
+var _coachCooldownEnd  = 0;   // Timestamp wann der Cooldown endet
+var _coachCooldownTimer = null; // interval handle
+
+var COACH_COOLDOWN_MS = 60000; // 60 Sekunden
+
+function startCoachCooldown() {
+  _coachCooldownEnd = Date.now() + COACH_COOLDOWN_MS;
+  window.coachLocalCooldown = true;
+
+  var sendBtn = document.getElementById('coachSendBtn');
+  var input   = document.getElementById('coachInput');
+  if (input)   input.disabled   = true;
+  if (sendBtn) sendBtn.disabled = true;
+
+  // Countdown-Nachricht ins Chat einfügen
+  var chat = document.getElementById('coachChat');
+  var cdDiv = null;
+  if (chat) {
+    cdDiv = document.createElement('div');
+    cdDiv.className = 'coach-msg';
+    cdDiv.id = 'coachCooldownMsg';
+    cdDiv.innerHTML =
+      '<div class="coach-msg-icon" style="font-size:14px">⏳</div>' +
+      '<div class="coach-msg-bubble" style="font-size:12px;color:var(--ink3)" id="coachCooldownText">' +
+        'Bitte warte noch <strong>60</strong> Sekunden, bevor du eine weitere Nachricht sendest.' +
+      '</div>';
+    chat.appendChild(cdDiv);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  if (_coachCooldownTimer) clearInterval(_coachCooldownTimer);
+  _coachCooldownTimer = setInterval(function() {
+    var remaining = Math.ceil((_coachCooldownEnd - Date.now()) / 1000);
+
+    // Countdown-Text aktualisieren
+    var cdText = document.getElementById('coachCooldownText');
+    if (cdText) {
+      if (remaining > 0) {
+        cdText.innerHTML = 'Bitte warte noch <strong>' + remaining + '</strong> Sekunden, bevor du eine weitere Nachricht sendest.';
+      }
+    }
+
+    if (remaining <= 0) {
+      // Cooldown abgelaufen
+      clearInterval(_coachCooldownTimer);
+      _coachCooldownTimer = null;
+      window.coachLocalCooldown = false;
+
+      // Countdown-Nachricht entfernen
+      if (cdDiv && cdDiv.parentNode) cdDiv.parentNode.removeChild(cdDiv);
+
+      // Input und Button wieder freischalten
+      var sb = document.getElementById('coachSendBtn');
+      var inp = document.getElementById('coachInput');
+      if (sb)  { sb.disabled = false; }
+      if (inp) { inp.disabled = false; inp.focus(); }
+
+      // Kurze Bestätigung
+      appendCoachMsg('coach', '✅ Du kannst jetzt wieder eine Nachricht senden.');
+    }
+  }, 1000);
+}
+
 async function sendCoachMsg(isManual) {
-  // Wenn der Aufruf NICHT manuell durch dich erfolgt, wird er SOFORT blockiert!
   if (!isManual) {
-    console.log("🤖 Automatischer Hintergrund-Aufruf blockiert. Coach antwortet nur auf echte Nachrichten.");
+    console.log("🤖 Automatischer Hintergrund-Aufruf blockiert.");
     return;
   }
 
-  if (coachBusy) return;
+  // Cooldown aktiv → kein Reload, nur blockieren (Hinweis läuft bereits im Chat)
   if (window.coachLocalCooldown) return;
+  if (coachBusy) return;
 
   if (typeof coachMessages === 'undefined') { window.coachMessages = []; }
 
@@ -11287,26 +11338,20 @@ async function sendCoachMsg(isManual) {
   var text = input.value.trim();
   if (!text) return;
 
-  // 1. Text des Users im Chat anzeigen
   appendCoachMsg('user', text);
   input.value = '';
   setCoachBusy(true);
-  window.coachLocalCooldown = true;
 
-  // 2. LIVE-DATEN aus journalData + den globalen Hilfsfunktionen auslesen
-  //    (Das sind die echten Firestore-Daten dieser App — es gibt keine Realtime DB)
+  // Live-Daten aus journalData aufbereiten
   var firebaseContext = "HINTERGRUND-INFOS ZUM TRADER (LIVE AUS FIRESTORE):\n";
-
   try {
-    var allTrades = getAllTrades(); // alle Trades aus journalData (global verfügbar)
-
+    var allTrades = getAllTrades();
     if (allTrades.length > 0) {
       var valid   = allTrades.filter(function(t) { return t.pips !== '' && t.pips !== undefined; });
       var wins    = valid.filter(function(t) { return parseFloat(t.pips) > 0; });
       var losses  = valid.filter(function(t) { return parseFloat(t.pips) < 0; });
       var wr      = valid.length ? Math.round(wins.length / valid.length * 100) : 0;
       var netPips = valid.reduce(function(a, t) { return a + parseFloat(t.pips || 0); }, 0);
-
       firebaseContext += "- Trader: " + (currentName || 'Unbekannt') + "\n";
       firebaseContext += "- Plan: " + (currentPlan || 'free') + "\n";
       firebaseContext += "- Gesamt-Trades: " + allTrades.length + "\n";
@@ -11314,8 +11359,6 @@ async function sendCoachMsg(isManual) {
       firebaseContext += "- Wins: " + wins.length + " | Losses: " + losses.length + "\n";
       firebaseContext += "- Win-Rate: " + wr + "%\n";
       firebaseContext += "- Net Pips gesamt: " + netPips.toFixed(1) + "\n";
-
-      // Setup-Breakdown
       var setups = {};
       allTrades.forEach(function(t) {
         if (t.setup) {
@@ -11324,11 +11367,7 @@ async function sendCoachMsg(isManual) {
           if (parseFloat(t.pips || 0) > 0) setups[t.setup].wins++;
         }
       });
-      if (Object.keys(setups).length > 0) {
-        firebaseContext += "- Setup-Performance: " + JSON.stringify(setups) + "\n";
-      }
-
-      // Session-Breakdown
+      if (Object.keys(setups).length) firebaseContext += "- Setup-Performance: " + JSON.stringify(setups) + "\n";
       var sessions = {};
       allTrades.forEach(function(t) {
         if (t.session) {
@@ -11337,29 +11376,17 @@ async function sendCoachMsg(isManual) {
           if (parseFloat(t.pips || 0) > 0) sessions[t.session].wins++;
         }
       });
-      if (Object.keys(sessions).length > 0) {
-        firebaseContext += "- Session-Performance: " + JSON.stringify(sessions) + "\n";
-      }
-
-      // Häufigste Fehler
+      if (Object.keys(sessions).length) firebaseContext += "- Session-Performance: " + JSON.stringify(sessions) + "\n";
       var mistakes = {};
       allTrades.forEach(function(t) {
-        (t.mistakes || []).forEach(function(m) {
-          mistakes[m] = (mistakes[m] || 0) + 1;
-        });
+        (t.mistakes || []).forEach(function(m) { mistakes[m] = (mistakes[m] || 0) + 1; });
       });
-      if (Object.keys(mistakes).length > 0) {
-        firebaseContext += "- Häufige Fehler: " + JSON.stringify(mistakes) + "\n";
-      }
-
-      // Letzte 5 Trades
+      if (Object.keys(mistakes).length) firebaseContext += "- Häufige Fehler: " + JSON.stringify(mistakes) + "\n";
       var recent = allTrades.slice(-5).map(function(t) {
         return (t._date || t.date || '') + ' ' + (t.symbol || '?') + ' ' +
-               (t.dir || '') + ' ' + (t.pips || '?') + ' pips [' +
-               (t.setup || 'kein Setup') + ']';
+               (t.dir || '') + ' ' + (t.pips || '?') + ' pips [' + (t.setup || 'kein Setup') + ']';
       });
       firebaseContext += "- Letzte 5 Trades: " + recent.join(' | ') + "\n";
-
     } else {
       firebaseContext += "- Noch keine Trades im Journal vorhanden.\n";
       firebaseContext += "- Trader: " + (currentName || 'Unbekannt') + "\n";
@@ -11369,10 +11396,7 @@ async function sendCoachMsg(isManual) {
     firebaseContext += "- Journaldaten konnten nicht ausgelesen werden.\n";
   }
 
-  // 3. Prompt für die KI zusammenbauen (im Chat unsichtbar)
   var promptForAi = firebaseContext + "\nFrage des Traders: " + text;
-
-  // In die Historie pushen
   coachMessages.push({ role: 'user', content: promptForAi });
   if (coachMessages.length > 8) { coachMessages = coachMessages.slice(-8); }
 
@@ -11393,7 +11417,6 @@ async function sendCoachMsg(isManual) {
     }
 
     var data = await res.json();
-
     var reply = '';
     if (data.response) {
       reply = data.response;
@@ -11418,34 +11441,26 @@ async function sendCoachMsg(isManual) {
   }
 
   setCoachBusy(false);
-
-  setTimeout(function() {
-    window.coachLocalCooldown = false;
-  }, 10000);
+  startCoachCooldown(); // ← Cooldown NACH dem Antwort-Empfang starten
 }
 
 function coachQuick(text) {
   var input = document.getElementById('coachInput');
   if (input) { input.value = text; }
-  sendCoachMsg(true); // Schickt die Nachricht korrekt als manuellen Klick ab!
+  sendCoachMsg(true);
 }
 
 function appendCoachMsg(role, text) {
   var chat = document.getElementById('coachChat');
   if (!chat) return;
-
   var div = document.createElement('div');
   div.className = 'coach-msg' + (role === 'user' ? ' user-msg' : '');
-
   var icon = document.createElement('div');
   icon.className = 'coach-msg-icon';
   icon.textContent = role === 'user' ? (currentName ? currentName[0].toUpperCase() : 'U') : '🤖';
-
   var bubble = document.createElement('div');
   bubble.className = 'coach-msg-bubble';
-  // Render newlines as <br>
   bubble.innerHTML = text.replace(/\n/g, '<br>');
-
   div.appendChild(icon);
   div.appendChild(bubble);
   chat.appendChild(div);
@@ -11458,10 +11473,12 @@ function setCoachBusy(busy) {
   var sendBtn = document.getElementById('coachSendBtn');
   var input   = document.getElementById('coachInput');
   if (typing)  typing.classList.toggle('active', busy);
-  if (sendBtn) sendBtn.disabled = busy;
-  if (input)   input.disabled  = busy;
+  // Nur sperren wenn busy — entsperren übernimmt startCoachCooldown
+  if (busy) {
+    if (sendBtn) sendBtn.disabled = true;
+    if (input)   input.disabled   = true;
+  }
 }
-
 </script>
 </body>
 </html>
