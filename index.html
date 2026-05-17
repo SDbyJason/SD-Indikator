@@ -11272,56 +11272,51 @@ function buildCoachContext() {
 
 async function sendCoachMsg() {
   if (coachBusy) return;
+
   var input = document.getElementById('coachInput');
-  var msg   = (input.value || '').trim();
-  if (!msg) return;
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text) return;
 
+  appendCoachMsg('user', text);
   input.value = '';
-  input.style.height = 'auto';
-  appendCoachMsg('user', msg);
-  coachHistory.push({ role: 'user', content: msg });
-
   setCoachBusy(true);
 
-  try {
-    var systemPrompt = [
-      'You are an elite trading coach embedded in APEX Trading OS.',
-      'You have access to the trader\'s complete journal data shown below.',
-      'Be direct, specific, and actionable. Reference actual numbers and patterns from their data.',
-      'Use trading terminology. Keep responses concise (max 200 words) unless asked for a full review.',
-      'FORMAT: Use short paragraphs. No markdown headers. Emojis sparingly.',
-      '',
-      '=== TRADER DATA ===',
-      buildCoachContext(),
-      '==================='
-    ].join('\n');
+  coachMessages.push({ role: 'user', content: text });
 
-    var resp = await fetch(COACH_WORKER_URL, {
+  try {
+    var res = await fetch(COACH_WORKER_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        uid:     currentUID,
-        system:  systemPrompt,
-        messages: coachHistory
+        uid: currentUser ? currentUser.uid : 'guest',
+        system: "Trading Coach",
+        messages: coachMessages
       })
     });
 
-    if (!resp.ok) {
-      var errData = await resp.json().catch(function() { return {}; });
-      throw new Error(errData.error || 'Worker error ' + resp.status);
+    if (!res.ok) {
+      var errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Server-Fehler (Status ' + res.status + ')');
     }
 
-    var data = await resp.json();
-    var reply = (data.content || [])
-      .filter(function(b) { return b.type === 'text'; })
-      .map(function(b) { return b.text; })
-      .join('\n') || '(No response)';
+    var data = await res.json();
+    
+    var reply = '';
+    if (data.response) {
+      reply = data.response; 
+    } else if (data.choices && data.choices[0] && data.choices[0].message) {
+      reply = data.choices[0].message.content; 
+    } else {
+      reply = '🤖 Fehler: Unerwartetes Format vom Server.';
+    }
 
-    coachHistory.push({ role: 'assistant', content: reply });
+    coachMessages.push({ role: 'assistant', content: reply });
     appendCoachMsg('coach', reply);
 
   } catch(e) {
-    appendCoachMsg('coach', '⚠ Could not reach the Coach server. Make sure your Cloudflare Worker is deployed and the COACH_WORKER_URL is set correctly.\n\nError: ' + e.message);
+    console.error("Coach-Fehler:", e);
+    appendCoachMsg('coach', '⚠ Fehler bei der Verbindung:\n' + e.message);
   }
 
   setCoachBusy(false);
