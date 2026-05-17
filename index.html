@@ -4463,7 +4463,7 @@ function _authAction(type) {
             onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCoachMsg();}"
             oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"
           ></textarea>
-          <button class="coach-send-btn" id="coachSendBtn" onclick="sendCoachMsg()" title="Send">➤</button>
+          <button class="coach-send-btn" id="coachSendBtn" onclick="sendCoachMsg(true)" title="Send">➤</button>
         </div>
       </div>
 
