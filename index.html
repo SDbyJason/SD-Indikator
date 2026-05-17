@@ -11273,6 +11273,11 @@ function buildCoachContext() {
 async function sendCoachMsg() {
   if (coachBusy) return;
 
+  // SICHERHEITS-CHECK: Falls coachMessages auf der Seite nicht existiert, erstellen wir es hier einfach!
+  if (typeof coachMessages === 'undefined') {
+    window.coachMessages = [];
+  }
+
   var input = document.getElementById('coachInput');
   if (!input) return;
   var text = input.value.trim();
@@ -11321,7 +11326,6 @@ async function sendCoachMsg() {
 
   setCoachBusy(false);
 }
-
 function coachQuick(text) {
   var input = document.getElementById('coachInput');
   if (input) { input.value = text; }
