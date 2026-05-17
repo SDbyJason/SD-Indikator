@@ -11633,6 +11633,7 @@ function retryTradeAnalyse() {
 // Hauptfunktion — wird nach saveTradeEdit() oder updateTrade() aufgerufen
 async function runTradeAnalyse(trade) {
   if (!trade) return;
+  if (typeof currentPlan === 'undefined' || currentPlan !== 'pro') return;
 
   // Nur analysieren wenn genug Daten vorhanden
   var hasPips   = trade.pips !== '' && trade.pips !== undefined && trade.pips !== null;
