@@ -420,7 +420,7 @@ body > * { position: relative; z-index: 1; }
 
 /* ══════════════════════════════════════
    LAYOUT SHELL
-══════════════════════════════════════ */
+═══════════════════════���══════════════ */
 #shell { display: none; min-height: 100vh; }
 #shell.visible { display: flex; flex-direction: column; }
 
@@ -679,6 +679,13 @@ nav {
   background: rgba(0,0,0,0.55);
 }
 .mobile-sheet-backdrop.open { display: block; }
+/* Hide mobile sheet + backdrop on desktop — they're only used by the mobile bottom nav */
+@media (min-width: 701px) {
+  .mobile-sheet,
+  .mobile-sheet-backdrop,
+  .mobile-sheet.open,
+  .mobile-sheet-backdrop.open { display: none !important; }
+}
 .mobile-sheet {
   position: fixed; bottom: calc(60px + env(safe-area-inset-bottom)); left: 0; right: 0; z-index: 270;
   background: rgba(8,10,13,0.99);
@@ -872,7 +879,7 @@ nav {
 
 /* ══════════════════════════════════════
    OVERVIEW PAGE
-══════════════════════════════════════ */
+═══════════════════════��══════════════ */
 .ov-kpi-row {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1857,7 +1864,7 @@ nav {
 
 /* ══════════════════════════════════════
    SETUP TRACKING
-══════════════════════════════════════ */
+═══════��══════════════════════════════ */
 .setups-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 10px;
@@ -6204,7 +6211,7 @@ window.addEventListener('load', () => {
   });
 });
 
-// ─── AUTH HELPERS ─────────────────────
+// ─── AUTH HELPERS ──���──────────────────
 
 function setBtnLoading(btnId, loading) {
   const btn = document.getElementById(btnId);
@@ -11607,7 +11614,7 @@ function renderActionRecommendations() {
   else if(wr<40&&all.length>=10) recs.push({icon:'🔍',cls:'loss',pri:'high',title:'Review Entry Criteria ('+wr+'% WR over '+all.length+' trades)',text:'Pull up your last 10 losing trades. Find what they have in common and eliminate that trigger.'});
 
   container.innerHTML = recs.length ? recs.map(function(r){
-    var labels={high:'🔴 High Priority',med:'🟡 Medium Priority',low:'🟢 Low Priority'};
+    var labels={high:'🔴 High Priority',med:'🟡 Medium Priority',low:'��� Low Priority'};
     return '<div class="action-rec-card"><div class="action-rec-icon '+r.cls+'">'+r.icon+'</div><div class="action-rec-body"><div class="action-rec-title">'+r.title+'</div><div class="action-rec-text">'+r.text+'</div><div class="action-rec-priority '+r.pri+'">'+labels[r.pri]+'</div></div></div>';
   }).join('') : '';
 }
