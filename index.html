@@ -4572,11 +4572,7 @@ function _authAction(type) {
           <div class="nav-group-drop" id="navgdrop-trading">
             <button class="nav-item" onclick="nav('journal');closeNavGroups()" id="nav-journal">Journal</button>
             <button class="nav-item" onclick="nav('calendar');closeNavGroups()" id="nav-calendar">Calendar</button>
-            <button class="nav-item" onclick="nav('econews');closeNavGroups()" id="nav-econews">Eco News</button>
             <button class="nav-item" onclick="nav('stats');closeNavGroups()" id="nav-stats">Statistics</button>
-            <button class="nav-item" onclick="nav('calculators');closeNavGroups()" id="nav-calculators">Calculators</button>
-            <button class="nav-item" onclick="nav('symbolstats');closeNavGroups()" id="nav-symbolstats">Symbol Stats</button>
-
           </div>
         </div>
         <div class="nav-group" id="navg-analysis">
@@ -4584,12 +4580,20 @@ function _authAction(type) {
             Analysis <span class="nav-group-arrow">›</span>
           </button>
           <div class="nav-group-drop" id="navgdrop-analysis">
-            <button class="nav-item" onclick="nav('psychology');closeNavGroups()" id="nav-psychology">Psychology</button>
             <button class="nav-item" onclick="nav('insights');closeNavGroups()" id="nav-insights">AI Insights</button>
+            <button class="nav-item" onclick="nav('psychology');closeNavGroups()" id="nav-psychology">Psychology</button>
             <button class="nav-item" onclick="nav('setups');closeNavGroups()" id="nav-setups">Setups</button>
             <button class="nav-item" onclick="nav('indicator');closeNavGroups()" id="nav-indicator">SD Zones</button>
             <button class="nav-item" onclick="nav('rules');closeNavGroups()" id="nav-rules">Rules Engine</button>
-
+          </div>
+        </div>
+        <div class="nav-group" id="navg-tools">
+          <button class="nav-group-btn" onclick="toggleNavGroup('tools')">
+            Tools <span class="nav-group-arrow">›</span>
+          </button>
+          <div class="nav-group-drop" id="navgdrop-tools">
+            <button class="nav-item" onclick="nav('calculators');closeNavGroups()" id="nav-calculators">Calculators</button>
+            <button class="nav-item" onclick="nav('econews');closeNavGroups()" id="nav-econews">Eco Calendar</button>
           </div>
         </div>
         <div class="nav-group" id="navg-social">
@@ -4691,37 +4695,7 @@ function _authAction(type) {
       </div>
     </div>
 
-    <!-- PROP FIRM DRAWDOWN MONITOR (shown only in Prop Firm Mode) -->
-    <div class="prop-firm-dd-cards" id="propFirmDDCards">
-      <!-- Daily DD Card -->
-      <div class="prop-dd-card" id="propDailyDDCard">
-        <div class="prop-dd-label">🔥 Daily Drawdown</div>
-        <div class="prop-dd-current loss-c" id="propDailyDDCurrent">0.0%</div>
-        <div class="prop-dd-limit">Limit: <span id="propDailyDDLimit">—</span> · <span id="propDailyDDLimitUSD" style="font-family:var(--font-mono);font-size:11px;color:var(--ink3)">—</span></div>
-        <div class="prop-dd-bar-bg">
-          <div class="prop-dd-bar-fill safe" id="propDailyDDBar" style="width:0%"></div>
-        </div>
-        <div class="prop-dd-status">
-          <div class="prop-dd-pct safe" id="propDailyDDPct">0%</div>
-          <div class="goal-status-text" id="propDailyDDStatus">Within daily limit</div>
-        </div>
-      </div>
-      <!-- Total DD Card -->
-      <div class="prop-dd-card" id="propTotalDDCard">
-        <div class="prop-dd-label">☠ Total Drawdown</div>
-        <div class="prop-dd-current loss-c" id="propTotalDDCurrent">0.0%</div>
-        <div class="prop-dd-limit">Limit: <span id="propTotalDDLimit">—</span> · <span id="propTotalDDLimitUSD" style="font-family:var(--font-mono);font-size:11px;color:var(--ink3)">—</span></div>
-        <div class="prop-dd-bar-bg">
-          <div class="prop-dd-bar-fill safe" id="propTotalDDBar" style="width:0%"></div>
-        </div>
-        <div class="prop-dd-status">
-          <div class="prop-dd-pct safe" id="propTotalDDPct">0%</div>
-          <div class="goal-status-text" id="propTotalDDStatus">Within total limit</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- GOAL TRACKER -->
+    <!-- GOAL TRACKER MOVED UP — see below KPI row -->
     <div class="goal-tracker-section">
       <div class="glass-card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
@@ -4783,6 +4757,36 @@ function _authAction(type) {
               <div class="goal-status-text" id="goal-dd-status">Set a drawdown limit</div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROP FIRM DRAWDOWN MONITOR (shown only in Prop Firm Mode) -->
+    <div class="prop-firm-dd-cards" id="propFirmDDCards">
+      <!-- Daily DD Card -->
+      <div class="prop-dd-card" id="propDailyDDCard">
+        <div class="prop-dd-label">🔥 Daily Drawdown</div>
+        <div class="prop-dd-current loss-c" id="propDailyDDCurrent">0.0%</div>
+        <div class="prop-dd-limit">Limit: <span id="propDailyDDLimit">—</span> · <span id="propDailyDDLimitUSD" style="font-family:var(--font-mono);font-size:11px;color:var(--ink3)">—</span></div>
+        <div class="prop-dd-bar-bg">
+          <div class="prop-dd-bar-fill safe" id="propDailyDDBar" style="width:0%"></div>
+        </div>
+        <div class="prop-dd-status">
+          <div class="prop-dd-pct safe" id="propDailyDDPct">0%</div>
+          <div class="goal-status-text" id="propDailyDDStatus">Within daily limit</div>
+        </div>
+      </div>
+      <!-- Total DD Card -->
+      <div class="prop-dd-card" id="propTotalDDCard">
+        <div class="prop-dd-label">☠ Total Drawdown</div>
+        <div class="prop-dd-current loss-c" id="propTotalDDCurrent">0.0%</div>
+        <div class="prop-dd-limit">Limit: <span id="propTotalDDLimit">—</span> · <span id="propTotalDDLimitUSD" style="font-family:var(--font-mono);font-size:11px;color:var(--ink3)">—</span></div>
+        <div class="prop-dd-bar-bg">
+          <div class="prop-dd-bar-fill safe" id="propTotalDDBar" style="width:0%"></div>
+        </div>
+        <div class="prop-dd-status">
+          <div class="prop-dd-pct safe" id="propTotalDDPct">0%</div>
+          <div class="goal-status-text" id="propTotalDDStatus">Within total limit</div>
         </div>
       </div>
     </div>
@@ -4967,6 +4971,20 @@ function _authAction(type) {
       <h1>Performance <span style="color:var(--gold)">Statistics</span></h1>
       <p>Deep-dive analytics across all your trades and markets</p>
     </div>
+
+    <!-- Sub-tab switcher -->
+    <div class="stats-subtabs" id="statsSubtabs" style="display:flex;gap:6px;margin-bottom:14px;border-bottom:0.5px solid var(--rim);padding-bottom:0">
+      <button class="stats-subtab active" data-stab="overview" onclick="switchStatsTab('overview')"
+        style="background:none;border:none;color:var(--ink);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:10px 16px;cursor:pointer;border-bottom:2px solid var(--gold);margin-bottom:-0.5px">
+        Overview
+      </button>
+      <button class="stats-subtab" data-stab="symbols" onclick="switchStatsTab('symbols')"
+        style="background:none;border:none;color:var(--ink3);font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-0.5px;transition:color 0.15s">
+        Symbols
+      </button>
+    </div>
+
+    <div id="statsTab-overview">
     <div class="stats-grid">
       <div class="stat-section">
         <div class="glass-card">
@@ -5012,6 +5030,17 @@ function _authAction(type) {
         </div>
       </div>
     </div>
+    </div><!-- /statsTab-overview -->
+
+    <div id="statsTab-symbols" style="display:none">
+      <div class="glass-card">
+        <div class="stat-group-title">Performance by Symbol</div>
+        <div style="font-size:12px;color:var(--ink3);margin-bottom:12px">Win Rate, Average Pips, and Trade Count for each symbol you've traded.</div>
+        <div id="symStatGrid" class="sym-stat-grid">
+          <div style="color:var(--ink3);font-size:13px;padding:20px 0">No trades logged yet.</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ══════ PSYCHOLOGY ══════ -->
@@ -5021,6 +5050,29 @@ function _authAction(type) {
       <h1>Psychology <span style="color:var(--gold)">Dashboard</span></h1>
       <p>Track emotional patterns, repeated mistakes, and mental performance</p>
     </div>
+
+    <!-- HERO: Overall Psychology Score (full-width, centered) -->
+    <div class="glass-card" style="margin-bottom:16px;text-align:center;padding:2rem 1.5rem">
+      <div class="stat-group-title" style="margin-bottom:1rem">Overall Psychology Score</div>
+      <div class="score-gauge" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+        <div class="gauge-ring">
+          <svg width="160" height="160" viewBox="0 0 120 120">
+            <circle class="gauge-track" cx="60" cy="60" r="50"/>
+            <circle class="gauge-fill" id="gaugeFill" cx="60" cy="60" r="50"
+              stroke="var(--gold)"
+              stroke-dasharray="314.16"
+              stroke-dashoffset="220"
+              transform="rotate(-90 60 60)"/>
+          </svg>
+          <div class="gauge-text">
+            <div class="gauge-score" id="gaugeScore">50</div>
+            <div class="gauge-label">/ 100</div>
+          </div>
+        </div>
+        <div style="font-size:14px;color:var(--ink2)">Disciplined Trader</div>
+      </div>
+    </div>
+
     <div class="psych-page-grid">
       <div>
         <div class="glass-card" style="margin-bottom:12px">
@@ -5035,26 +5087,6 @@ function _authAction(type) {
         </div>
       </div>
       <div>
-        <div class="glass-card" style="margin-bottom:12px;text-align:center">
-          <div class="stat-group-title">Overall Psychology Score</div>
-          <div class="score-gauge">
-            <div class="gauge-ring">
-              <svg width="120" height="120" viewBox="0 0 120 120">
-                <circle class="gauge-track" cx="60" cy="60" r="50"/>
-                <circle class="gauge-fill" id="gaugeFill" cx="60" cy="60" r="50"
-                  stroke="var(--gold)"
-                  stroke-dasharray="314.16"
-                  stroke-dashoffset="220"
-                  transform="rotate(-90 60 60)"/>
-              </svg>
-              <div class="gauge-text">
-                <div class="gauge-score" id="gaugeScore">50</div>
-                <div class="gauge-label">/ 100</div>
-              </div>
-            </div>
-            <div style="font-size:13px;color:var(--ink2)">Disciplined Trader</div>
-          </div>
-        </div>
         <div class="glass-card">
           <div class="stat-group-title">Top Mistakes to Work On</div>
           <div id="topMistakesList">
@@ -5088,68 +5120,8 @@ function _authAction(type) {
       <h1>Trade <span style="color:var(--gold)">Insights</span></h1>
       <p>Pattern recognition and psychological analysis from your trade history</p>
     </div>
-    <div class="insights-grid" id="insightCards">
-      <div class="insight-card gold-accent">
-        <div class="ic-eye">Best Setup</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Log setups to see which performs best for you.</div>
-        <div class="ic-badge gold">Awaiting data</div>
-      </div>
-      <div class="insight-card profit-accent">
-        <div class="ic-eye">Best Session</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Tag your trade sessions to discover your edge.</div>
-        <div class="ic-badge profit">Awaiting data</div>
-      </div>
-      <div class="insight-card loss-accent">
-        <div class="ic-eye">Biggest Weakness</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Mistake tags will reveal your recurring patterns.</div>
-        <div class="ic-badge loss">Awaiting data</div>
-      </div>
-      <div class="insight-card info-accent">
-        <div class="ic-eye">Avg Hold Time</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Timeframe data will show your optimal hold duration.</div>
-        <div class="ic-badge" style="background:rgba(91,155,213,0.1);color:var(--info)">Awaiting data</div>
-      </div>
-      <div class="insight-card gold-accent">
-        <div class="ic-eye">Risk Consistency</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Track your position sizing discipline over time.</div>
-        <div class="ic-badge gold">Awaiting data</div>
-      </div>
-      <div class="insight-card profit-accent">
-        <div class="ic-eye">Market Edge</div>
-        <div class="ic-val">—</div>
-        <div class="ic-desc">Which market gives you the highest win rate?</div>
-        <div class="ic-badge profit">Awaiting data</div>
-      </div>
-    </div>
 
-    <div class="glass-card">
-      <div class="gc-title" style="margin-bottom:1.25rem">AI Observations</div>
-      <div class="ai-feed" id="aiFeed">
-        <div class="ai-feed-item">
-          <div class="ai-feed-icon gold">💡</div>
-          <div class="ai-feed-body">
-            <div class="ai-feed-title">Getting Started</div>
-            <div class="ai-feed-text">Log at least 10 trades with complete data — symbol, session, setup, and mistakes — to unlock AI-powered pattern analysis. The more you log, the smarter your insights become.</div>
-            <div class="ai-feed-time">System · Now</div>
-          </div>
-        </div>
-        <div class="ai-feed-item">
-          <div class="ai-feed-icon info">📊</div>
-          <div class="ai-feed-body">
-            <div class="ai-feed-title">Psychology Tracking Enabled</div>
-            <div class="ai-feed-text">Rate your discipline, confidence, focus, and patience every day. Over time, the system will correlate your mental state with your P&L to identify peak performance conditions.</div>
-            <div class="ai-feed-time">Insight Engine · Ready</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- AI COACH SECTION -->
+    <!-- AI COACH SECTION (moved to top — most valuable feature) -->
     <div class="coach-wrap" id="coachWrap">
 
       <!-- LOCKED STATE (shown to free users) -->
@@ -5215,6 +5187,70 @@ function _authAction(type) {
         </div>
       </div>
 
+    </div>
+
+    <!-- Weekly Intelligence Report is dynamically injected here by initWeeklyReport() -->
+    <div id="weeklyReportAnchor"></div>
+
+    <div class="glass-card">
+      <div class="gc-title" style="margin-bottom:1.25rem">AI Observations</div>
+      <div class="ai-feed" id="aiFeed">
+        <div class="ai-feed-item">
+          <div class="ai-feed-icon gold">💡</div>
+          <div class="ai-feed-body">
+            <div class="ai-feed-title">Getting Started</div>
+            <div class="ai-feed-text">Log at least 10 trades with complete data — symbol, session, setup, and mistakes — to unlock AI-powered pattern analysis. The more you log, the smarter your insights become.</div>
+            <div class="ai-feed-time">System · Now</div>
+          </div>
+        </div>
+        <div class="ai-feed-item">
+          <div class="ai-feed-icon info">📊</div>
+          <div class="ai-feed-body">
+            <div class="ai-feed-title">Psychology Tracking Enabled</div>
+            <div class="ai-feed-text">Rate your discipline, confidence, focus, and patience every day. Over time, the system will correlate your mental state with your P&L to identify peak performance conditions.</div>
+            <div class="ai-feed-time">Insight Engine · Ready</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="insights-grid" id="insightCards">
+      <div class="insight-card gold-accent">
+        <div class="ic-eye">Best Setup</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Log setups to see which performs best for you.</div>
+        <div class="ic-badge gold">Awaiting data</div>
+      </div>
+      <div class="insight-card profit-accent">
+        <div class="ic-eye">Best Session</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Tag your trade sessions to discover your edge.</div>
+        <div class="ic-badge profit">Awaiting data</div>
+      </div>
+      <div class="insight-card loss-accent">
+        <div class="ic-eye">Biggest Weakness</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Mistake tags will reveal your recurring patterns.</div>
+        <div class="ic-badge loss">Awaiting data</div>
+      </div>
+      <div class="insight-card info-accent">
+        <div class="ic-eye">Avg Hold Time</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Timeframe data will show your optimal hold duration.</div>
+        <div class="ic-badge" style="background:rgba(91,155,213,0.1);color:var(--info)">Awaiting data</div>
+      </div>
+      <div class="insight-card gold-accent">
+        <div class="ic-eye">Risk Consistency</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Track your position sizing discipline over time.</div>
+        <div class="ic-badge gold">Awaiting data</div>
+      </div>
+      <div class="insight-card profit-accent">
+        <div class="ic-eye">Market Edge</div>
+        <div class="ic-val">—</div>
+        <div class="ic-desc">Which market gives you the highest win rate?</div>
+        <div class="ic-badge profit">Awaiting data</div>
+      </div>
     </div>
   </div>
 
@@ -6024,17 +6060,7 @@ function _authAction(type) {
   </div>
 
 
-  <!-- ══ SYMBOL STATS PAGE ══════════════════════════════════════════ -->
-  <div class="page" id="page-symbolstats">
-    <div class="page-header"><div class="page-title">Symbol Stats</div></div>
-    <div class="glass-card">
-      <div class="stat-group-title">Performance by Symbol</div>
-      <div style="font-size:12px;color:var(--ink3);margin-bottom:12px">Win Rate, Average Pips, and Trade Count for each symbol you've traded.</div>
-      <div id="symStatGrid" class="sym-stat-grid">
-        <div style="color:var(--ink3);font-size:13px;padding:20px 0">No trades logged yet.</div>
-      </div>
-    </div>
-  </div>
+  <!-- ══ SYMBOL STATS — now integrated as a sub-tab of Statistics page ══ -->
 
   <!-- ══ RULES ENGINE PAGE ═══════════════════════════════════════════ -->
   <div class="page" id="page-rules">
@@ -6567,18 +6593,23 @@ var _mobileSheetGroups = {
     items: [
       { id: 'journal',     icon: '◧', label: 'Journal' },
       { id: 'calendar',    icon: '◫', label: 'Calendar' },
-      { id: 'stats',       icon: '◈', label: 'Statistics' },
-      { id: 'calculators', icon: '◧', label: 'Calculators' },
-      { id: 'econews',     icon: '📰', label: 'Eco News' }
+      { id: 'stats',       icon: '◈', label: 'Statistics' }
     ]
   },
   analysis: {
     title: 'Analysis',
     items: [
-      { id: 'psychology', icon: '◎', label: 'Psychology' },
       { id: 'insights',   icon: '◉', label: 'AI Insights' },
+      { id: 'psychology', icon: '◎', label: 'Psychology' },
       { id: 'setups',     icon: '◈', label: 'Setups' },
       { id: 'indicator',  icon: '◉', label: 'SD Zones' }
+    ]
+  },
+  tools: {
+    title: 'Tools',
+    items: [
+      { id: 'calculators', icon: '◧', label: 'Calculators' },
+      { id: 'econews',     icon: '📰', label: 'Eco Calendar' }
     ]
   },
   social: {
@@ -10687,17 +10718,37 @@ window.listenDM = function() {
   var _origNav = window.nav;
   window.nav = function(id) {
     if (_origNav) _origNav.apply(this, arguments);
-    if (id === 'symbolstats') renderSymbolStats();
+    if (id === 'symbolstats') { id = 'stats'; switchStatsTab('symbols'); }
+    if (id === 'stats')       renderSymbolStats();
     if (id === 'rules')       { loadRules(); renderRulesEngine(); }
     if (id === 'settings')    { setTimeout(function() { injectCustomTagsSettings(); renderCustomTagsUI(); }, 60); }
   };
 })();
 
+// ── Stats sub-tab switcher ────────────────────────────────────────
+window.switchStatsTab = function(tab) {
+  var ov = document.getElementById('statsTab-overview');
+  var sy = document.getElementById('statsTab-symbols');
+  if (!ov || !sy) return;
+  if (tab === 'symbols') {
+    ov.style.display = 'none';
+    sy.style.display = '';
+    if (typeof renderSymbolStats === 'function') renderSymbolStats();
+  } else {
+    ov.style.display = '';
+    sy.style.display = 'none';
+  }
+  document.querySelectorAll('.stats-subtab').forEach(function(b) {
+    var active = b.getAttribute('data-stab') === tab;
+    b.classList.toggle('active', active);
+    b.style.color = active ? 'var(--ink)' : 'var(--ink3)';
+    b.style.borderBottom = active ? '2px solid var(--gold)' : '2px solid transparent';
+  });
+};
+
 // ── Mobile sheet groups ────────────────────────────────────────────
 (function() {
   if (typeof _mobileSheetGroups === 'undefined') return;
-  if (_mobileSheetGroups.trading && !_mobileSheetGroups.trading.items.find(function(x){return x.id==='symbolstats';}))
-    _mobileSheetGroups.trading.items.push({ id: 'symbolstats', icon: '◈', label: 'Symbol Stats' });
   if (_mobileSheetGroups.analysis && !_mobileSheetGroups.analysis.items.find(function(x){return x.id==='rules';}))
     _mobileSheetGroups.analysis.items.push({ id: 'rules', icon: '⚖', label: 'Rules Engine' });
 })();
@@ -13878,26 +13929,6 @@ var _analyseDebounce = null;
         quickBtns.parentNode.insertBefore(wrap, quickBtns.nextSibling);
       }
 
-      // Button in Insights page
-      var insightsPage = document.getElementById('page-insights');
-      if (insightsPage && !document.getElementById('cgInsightTrigger')) {
-        var insightBtn = document.createElement('button');
-        insightBtn.id = 'cgInsightTrigger';
-        insightBtn.className = 'cg-trigger-btn';
-        insightBtn.innerHTML = '📸 Grade a Chart Setup with AI';
-        insightBtn.style.cssText = 'margin-top:16px;margin-bottom:16px;font-size:12px;padding:10px 20px';
-        insightBtn.onclick = function() {
-          if (typeof currentPlan !== 'undefined' && currentPlan !== 'pro') {
-            showToast('🔒 Grade a Chart is a Pro feature. Contact your APEX admin to upgrade.');
-            return;
-          }
-          window.openChartGrade();
-        };
-        // Insert before the AI Observations card
-        var feedCard = insightsPage.querySelector('.glass-card');
-        if (feedCard) insightsPage.insertBefore(insightBtn, feedCard);
-        else insightsPage.appendChild(insightBtn);
-      }
     }
 
     // ── Init ─────────────────────────────────────────────────────
@@ -13946,9 +13977,13 @@ var _analyseDebounce = null;
             </div>
           </div>
         `;
-        var ph = insightsPage.querySelector('.ph');
-        if (ph) ph.insertAdjacentElement('afterend', locked);
-        else insightsPage.prepend(locked);
+        var anchor = document.getElementById('weeklyReportAnchor');
+        if (anchor) anchor.replaceWith(locked);
+        else {
+          var ph = insightsPage.querySelector('.ph');
+          if (ph) ph.insertAdjacentElement('afterend', locked);
+          else insightsPage.prepend(locked);
+        }
         return;
       }
 
@@ -13970,10 +14005,15 @@ var _analyseDebounce = null;
           </div>
         </div>
       `;
-      // Insert at the top of insights page (after the header)
-      var ph = insightsPage.querySelector('.ph');
-      if (ph) ph.insertAdjacentElement('afterend', card);
-      else insightsPage.prepend(card);
+      // Insert at the weekly report anchor (between Coach and AI Observations)
+      var anchor = document.getElementById('weeklyReportAnchor');
+      if (anchor) {
+        anchor.replaceWith(card);
+      } else {
+        var ph = insightsPage.querySelector('.ph');
+        if (ph) ph.insertAdjacentElement('afterend', card);
+        else insightsPage.prepend(card);
+      }
 
       loadWeeklyReport();
     }
