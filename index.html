@@ -15197,11 +15197,16 @@ async function startProCheckout() {
   const urlParams = new URLSearchParams(window.location.search);
   const ref       = urlParams.get("ref") || "";
 
-  // 2. Checkout-Session beim Worker anfragen
+  // 2. Firebase UID des eingeloggten Users holen
+  const uid = (typeof currentUID !== "undefined" && currentUID) ? currentUID : "";
+
+  // 3. Checkout-Session beim Worker anfragen (ref + uid übergeben)
   try {
-    const endpoint = ref
-      ? `${CHECKOUT_WORKER_URL}/create-checkout?ref=${encodeURIComponent(ref)}`
-      : `${CHECKOUT_WORKER_URL}/create-checkout`;
+    const qp = new URLSearchParams();
+    if (ref) qp.set("ref", ref);
+    if (uid) qp.set("uid", uid);  // ← damit Webhook weiß wer bezahlt hat
+    const query    = qp.toString() ? "?" + qp.toString() : "";
+    const endpoint = `${CHECKOUT_WORKER_URL}/create-checkout${query}`;
 
     const res  = await fetch(endpoint, { method: "POST" });
     const data = await res.json();
