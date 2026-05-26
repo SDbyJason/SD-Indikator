@@ -4618,7 +4618,7 @@ body.light .apex-banner-close { border-color: rgba(26,122,74,0.2); color: rgba(2
 
     <div class="apex-upgrade-price-row">
       <div class="apex-upgrade-price" id="apexUpgradePriceDisplay">€29.99</div>
-      <div class="apex-upgrade-price-unit">one-time</div>
+      <div class="apex-upgrade-price-unit">/ Monat</div>
     </div>
 
     <button id="apexStripeBtn" class="apex-upgrade-cta" onclick="startProCheckout()">
@@ -4626,7 +4626,7 @@ body.light .apex-banner-close { border-color: rgba(26,122,74,0.2); color: rgba(2
     </button>
 
     <div class="apex-upgrade-fine">
-      Secure checkout via Stripe · One-time payment · Instantly active
+      Secure checkout via Stripe · Monatlich kündbar · Sofort aktiv
     </div>
 
   </div>
@@ -15190,23 +15190,18 @@ document.addEventListener('keydown', function(e) {
 <script>
 // ── Stripe Connect Checkout ──────────────────────────────────────────────────
 // Deine neue Checkout-Worker URL (nach dem Deploy eintragen):
-const CHECKOUT_WORKER_URL = "https://apex-checkout.4kjyyyftv6.workers.dev";
+const CHECKOUT_WORKER_URL = "apex-checkout.4kjyyyftv6.workers.dev";
 
 async function startProCheckout() {
   // 1. Referral Code aus URL lesen (z.B. ?ref=jason)
   const urlParams = new URLSearchParams(window.location.search);
   const ref       = urlParams.get("ref") || "";
 
-  // 2. Firebase UID des eingeloggten Users holen
-  const uid = (typeof currentUID !== "undefined" && currentUID) ? currentUID : "";
-
-  // 3. Checkout-Session beim Worker anfragen (ref + uid übergeben)
+  // 2. Checkout-Session beim Worker anfragen
   try {
-    const qp = new URLSearchParams();
-    if (ref) qp.set("ref", ref);
-    if (uid) qp.set("uid", uid);  // ← damit Webhook weiß wer bezahlt hat
-    const query    = qp.toString() ? "?" + qp.toString() : "";
-    const endpoint = `${CHECKOUT_WORKER_URL}/create-checkout${query}`;
+    const endpoint = ref
+      ? `${CHECKOUT_WORKER_URL}/create-checkout?ref=${encodeURIComponent(ref)}`
+      : `${CHECKOUT_WORKER_URL}/create-checkout`;
 
     const res  = await fetch(endpoint, { method: "POST" });
     const data = await res.json();
