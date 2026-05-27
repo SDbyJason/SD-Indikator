@@ -15236,5 +15236,476 @@ async function startProCheckout() {
 })();
 </script>
 
+<!--
+  APEX <-> cTrader INTEGRATION
+  ──────────────────────────────────────────────────────────────────
+  PASTE THIS ENTIRE BLOCK in your index.html, directly BEFORE </body>.
+  Make sure to replace the WORKER_URL constant below with the URL of
+  your deployed Cloudflare Worker (e.g. https://apex-ctrader.you.workers.dev).
+
+  Requires (already present in your app):
+    - global var: db (Firestore compat)
+    - global var: currentUID
+    - global var: journalData
+    - global fn:  save()             (persists journalData to Firestore)
+    - global fn:  renderTrades()     (re-renders the trade table)
+    - global fn:  showToast(msg)     (optional)
+-->
+
+<!-- ░░ STYLES ░░ -->
+<style>
+  /* cTrader connect button — drop into Settings */
+  .ct-card {
+    background: linear-gradient(145deg, rgba(15,19,23,0.97), rgba(9,11,14,0.99));
+    border: 0.5px solid var(--rim, rgba(201,168,76,0.08));
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 14px;
+    margin-top: 16px;
+  }
+  .ct-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ct-title { font-family: var(--font-display, 'Syne'); font-size: 14px; font-weight: 700; color: var(--gold, #c9a84c); letter-spacing: 0.06em; }
+  .ct-status { font-family: var(--font-mono, 'DM Mono'); font-size: 11px; color: var(--ink2, #a89880); display: flex; align-items: center; gap: 6px; }
+  .ct-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink3, #5c5040); }
+  .ct-dot.on { background: #3ecf8e; box-shadow: 0 0 6px #3ecf8e; }
+  .ct-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ct-btn {
+    background: rgba(201,168,76,0.08);
+    border: 0.5px solid rgba(201,168,76,0.3);
+    color: var(--gold, #c9a84c);
+    font-family: var(--font-body, 'Instrument Sans');
+    font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ct-btn:hover { background: rgba(201,168,76,0.16); border-color: rgba(201,168,76,0.5); }
+  .ct-btn.danger { color: #f0636a; border-color: rgba(240,99,106,0.3); background: rgba(240,99,106,0.06); }
+  .ct-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ct-select {
+    background: rgba(13,16,20,0.8);
+    border: 0.5px solid var(--rim2, rgba(201,168,76,0.16));
+    color: var(--ink, #f0ece6);
+    font-family: var(--font-mono, 'DM Mono');
+    font-size: 12px;
+    padding: 8px 10px; border-radius: 8px;
+    min-width: 220px;
+  }
+  .ct-meta { font-size: 10px; color: var(--ink3, #5c5040); letter-spacing: 0.08em; text-transform: uppercase; }
+  .ct-source-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 4px;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+    background: rgba(91,155,213,0.15); color: #5b9bd5;
+    margin-left: 6px; vertical-align: middle;
+  }
+</style>
+
+<!-- ░░ UI (auto-mounted into #settingsView or #settings; fallback: appended to body) ░░ -->
+<div id="ctIntegrationCard" class="ct-card" style="display:none">
+  <div class="ct-head">
+    <div class="ct-title">CTRADER · AUTO-SYNC</div>
+    <div class="ct-status"><span id="ctDot" class="ct-dot"></span><span id="ctStatusText">Not connected</span></div>
+  </div>
+  <div id="ctConnectRow" class="ct-row">
+    <button class="ct-btn" onclick="ctStartOAuth('demo')">Connect Demo</button>
+    <button class="ct-btn" onclick="ctStartOAuth('live')">Connect Live</button>
+    <span class="ct-meta">OAuth · secret stays on the Worker</span>
+  </div>
+  <div id="ctConnectedRow" class="ct-row" style="display:none">
+    <select id="ctAccountSelect" class="ct-select"></select>
+    <button class="ct-btn" onclick="ctSyncNow()">Sync Now</button>
+    <button class="ct-btn" onclick="ctSyncNow(30)">Sync Last 30d</button>
+    <button class="ct-btn danger" onclick="ctDisconnect()">Disconnect</button>
+  </div>
+  <div id="ctLastSync" class="ct-meta"></div>
+</div>
+
+<!-- ░░ LOGIC ░░ -->
+<script>
+(function(){
+  // ─── 0. CONFIG ─────────────────────────────────────────────────
+  const WORKER_URL = "https://YOUR-WORKER.workers.dev"; // <<<<<< REPLACE
+  const POLL_INTERVAL_MS = 5 * 60 * 1000; // background re-sync every 5 minutes when tab is active
+
+  // ─── 1. STATE ──────────────────────────────────────────────────
+  let ctState = {
+    accessToken:  null,
+    refreshToken: null,
+    expiresAt:    0,          // ms epoch
+    accountId:    null,       // ctidTraderAccountId
+    accountLabel: null,
+    accounts:     [],
+    lastSync:     0,
+    env:          null        // 'demo' | 'live'
+  };
+
+  // ─── 2. UI MOUNTING ────────────────────────────────────────────
+  function mountUI() {
+    const card = document.getElementById('ctIntegrationCard');
+    if (!card) return;
+    // Try common settings containers in order
+    const targets = [
+      '#settingsView .settings-section:last-of-type',
+      '#settingsView',
+      '#settings',
+      '#settingsTab',
+      '#view-settings'
+    ];
+    for (const sel of targets) {
+      const el = document.querySelector(sel);
+      if (el) { el.appendChild(card); card.style.display = 'flex'; return; }
+    }
+    // Fallback: show floating in body
+    document.body.appendChild(card);
+    card.style.display = 'flex';
+    card.style.position = 'fixed';
+    card.style.bottom = '20px';
+    card.style.right  = '20px';
+    card.style.maxWidth = '420px';
+    card.style.zIndex = '500';
+  }
+
+  // ─── 3. FIRESTORE PERSISTENCE ──────────────────────────────────
+  async function loadState() {
+    if (!window.db || !window.currentUID) return;
+    try {
+      const doc = await db.collection('apexUsers').doc(currentUID).get();
+      if (doc.exists) {
+        const ct = doc.data().ctrader || null;
+        if (ct) Object.assign(ctState, ct);
+      }
+    } catch(e) { console.warn('[ctrader] loadState', e); }
+  }
+  async function saveState() {
+    if (!window.db || !window.currentUID) return;
+    try {
+      await db.collection('apexUsers').doc(currentUID).set({
+        ctrader: {
+          accessToken:  ctState.accessToken,
+          refreshToken: ctState.refreshToken,
+          expiresAt:    ctState.expiresAt,
+          accountId:    ctState.accountId,
+          accountLabel: ctState.accountLabel,
+          lastSync:     ctState.lastSync,
+          env:          ctState.env
+        }
+      }, { merge: true });
+    } catch(e) { console.warn('[ctrader] saveState', e); }
+  }
+
+  // ─── 4. UI RENDERING ───────────────────────────────────────────
+  function render() {
+    const dot       = document.getElementById('ctDot');
+    const statusTxt = document.getElementById('ctStatusText');
+    const connRow   = document.getElementById('ctConnectRow');
+    const linkedRow = document.getElementById('ctConnectedRow');
+    const lastSync  = document.getElementById('ctLastSync');
+    const sel       = document.getElementById('ctAccountSelect');
+    if (!dot) return;
+
+    const isLinked = !!ctState.accessToken;
+    dot.classList.toggle('on', isLinked);
+    statusTxt.textContent = isLinked
+      ? `Connected · ${ctState.env ? ctState.env.toUpperCase() : ''}${ctState.accountLabel ? ' · ' + ctState.accountLabel : ''}`
+      : 'Not connected';
+    connRow.style.display   = isLinked ? 'none' : 'flex';
+    linkedRow.style.display = isLinked ? 'flex' : 'none';
+
+    if (sel && ctState.accounts && ctState.accounts.length) {
+      sel.innerHTML = ctState.accounts.map(a =>
+        `<option value="${a.ctidTraderAccountId}" ${String(a.ctidTraderAccountId)===String(ctState.accountId)?'selected':''}>${(a.accountNumber||a.ctidTraderAccountId) + (a.live?' · LIVE':' · DEMO') + (a.brokerName?' · '+a.brokerName:'')}</option>`
+      ).join('');
+      sel.onchange = function() {
+        ctState.accountId = sel.value;
+        const acc = ctState.accounts.find(a => String(a.ctidTraderAccountId) === String(sel.value));
+        ctState.accountLabel = acc ? (acc.accountNumber || acc.ctidTraderAccountId) : null;
+        saveState();
+        render();
+      };
+    }
+    if (lastSync) {
+      lastSync.textContent = ctState.lastSync
+        ? 'Last sync: ' + new Date(ctState.lastSync).toLocaleString()
+        : '';
+    }
+  }
+
+  // ─── 5. OAUTH FLOW ─────────────────────────────────────────────
+  window.ctStartOAuth = function(env) {
+    if (WORKER_URL.includes('YOUR-WORKER')) {
+      alert('Please set WORKER_URL in the ctrader snippet first.');
+      return;
+    }
+    ctState.env = env || 'demo';
+    const url = `${WORKER_URL}/oauth/start?state=${encodeURIComponent(currentUID||'')}&scope=trading`;
+    const w = window.open(url, 'ctrader_oauth', 'width=560,height=720');
+    if (!w) { alert('Popup blocked. Please allow popups for this site.'); return; }
+  };
+
+  window.addEventListener('message', async (ev) => {
+    if (!ev.data || ev.data.source !== 'apex-ctrader') return;
+    const p = ev.data.payload || {};
+    if (p.error) {
+      if (window.showToast) showToast('cTrader: ' + p.error);
+      else alert('cTrader error: ' + p.error);
+      return;
+    }
+    if (p.accessToken) {
+      ctState.accessToken  = p.accessToken;
+      ctState.refreshToken = p.refreshToken;
+      ctState.expiresAt    = Date.now() + (p.expiresIn ? p.expiresIn*1000 : 30*60*1000);
+      await fetchAccounts();
+      await saveState();
+      render();
+      if (window.showToast) showToast('cTrader connected');
+    }
+  });
+
+  // ─── 6. ACCOUNTS ───────────────────────────────────────────────
+  async function fetchAccounts() {
+    await ensureFreshToken();
+    const r = await fetch(`${WORKER_URL}/api/accounts?accessToken=${encodeURIComponent(ctState.accessToken)}`);
+    const data = await r.json();
+    // cTrader returns either {data:[...]} or array — normalize
+    const list = Array.isArray(data) ? data : (data.data || data.tradingAccounts || []);
+    ctState.accounts = list.map(a => ({
+      ctidTraderAccountId: a.ctidTraderAccountId || a.accountId || a.id,
+      accountNumber:       a.accountNumber || a.login || a.traderLogin,
+      brokerName:          a.brokerName || a.brokerTitleShort,
+      live:                a.live === true || a.environment === 'LIVE' || /live/i.test(a.environmentName||'')
+    })).filter(a => a.ctidTraderAccountId);
+    if (!ctState.accountId && ctState.accounts.length) {
+      ctState.accountId    = ctState.accounts[0].ctidTraderAccountId;
+      ctState.accountLabel = ctState.accounts[0].accountNumber;
+    }
+  }
+
+  // ─── 7. TOKEN REFRESH ──────────────────────────────────────────
+  async function ensureFreshToken() {
+    if (!ctState.accessToken) throw new Error('not_connected');
+    if (Date.now() < ctState.expiresAt - 60_000) return; // still valid
+    if (!ctState.refreshToken) throw new Error('no_refresh_token');
+    const r = await fetch(`${WORKER_URL}/api/refresh`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ refreshToken: ctState.refreshToken })
+    });
+    const d = await r.json();
+    if (!d.accessToken) throw new Error('refresh_failed');
+    ctState.accessToken  = d.accessToken;
+    ctState.refreshToken = d.refreshToken || ctState.refreshToken;
+    ctState.expiresAt    = Date.now() + (d.expiresIn ? d.expiresIn*1000 : 30*60*1000);
+    await saveState();
+  }
+
+  // ─── 8. SYNC TRADES ────────────────────────────────────────────
+  window.ctSyncNow = async function(daysBack) {
+    if (!ctState.accessToken) { alert('Connect cTrader first.'); return; }
+    if (!ctState.accountId)   { alert('Select an account first.'); return; }
+    try {
+      await ensureFreshToken();
+      const now  = Date.now();
+      const from = daysBack
+        ? now - daysBack*24*60*60*1000
+        : (ctState.lastSync ? ctState.lastSync - 60_000 : now - 90*24*60*60*1000); // default: last 90d on first sync
+      const url = `${WORKER_URL}/api/deals?accessToken=${encodeURIComponent(ctState.accessToken)}&ctidTraderAccountId=${ctState.accountId}&from=${from}&to=${now}&maxRows=1000`;
+      const r = await fetch(url);
+      const data = await r.json();
+      const deals = Array.isArray(data) ? data : (data.data || data.deals || []);
+      const result = mergeDealsIntoJournal(deals);
+      ctState.lastSync = now;
+      await saveState();
+      if (window.save) await save();
+      if (window.renderTrades) renderTrades();
+      render();
+      if (window.showToast) showToast(`cTrader sync: +${result.added} new, ${result.updated} updated, ${result.skipped} skipped`);
+      else alert(`Sync done: +${result.added} new · ${result.updated} updated · ${result.skipped} skipped (manually edited)`);
+    } catch(e) {
+      console.error('[ctrader] sync', e);
+      alert('Sync failed: ' + (e.message || e));
+    }
+  };
+
+  // ─── 9. MERGE LOGIC (key by ctraderId, skip manuallyEdited) ────
+  function mergeDealsIntoJournal(deals) {
+    let added = 0, updated = 0, skipped = 0;
+    if (!window.journalData) window.journalData = {};
+
+    // Group cTrader deals by positionId so an open+close pair becomes ONE trade.
+    const byPos = {};
+    deals.forEach(d => {
+      const pid = String(d.positionId || d.dealId);
+      if (!byPos[pid]) byPos[pid] = [];
+      byPos[pid].push(d);
+    });
+
+    Object.entries(byPos).forEach(([pid, group]) => {
+      // Sort chronologically (open first, close last)
+      group.sort((a,b) => (a.executionTimestamp||a.createTimestamp||0) - (b.executionTimestamp||b.createTimestamp||0));
+      const openDeal  = group[0];
+      const closeDeal = group[group.length-1];
+      // Only journal CLOSED positions
+      if (group.length < 2 && !closeDeal.closePositionDetail) return;
+
+      const closeTs   = closeDeal.executionTimestamp || closeDeal.createTimestamp;
+      const dateKey   = new Date(closeTs).toISOString().slice(0,10); // UTC YYYY-MM-DD
+      if (!journalData[dateKey]) journalData[dateKey] = { trades: [], notes: '', disc:5, conf:5, focus:5, pat:5 };
+
+      const trades = journalData[dateKey].trades;
+      const existingIdx = trades.findIndex(t => t.ctraderId && String(t.ctraderId) === pid);
+
+      const mapped = mapDealToTrade(pid, openDeal, closeDeal);
+
+      if (existingIdx === -1) {
+        trades.push(mapped);
+        added++;
+      } else {
+        const existing = trades[existingIdx];
+        if (existing.manuallyEdited) { skipped++; return; }
+        // Preserve user-added fields (note, setup, grade, mistakes, positives) — only refresh raw market data
+        trades[existingIdx] = Object.assign({}, existing, mapped, {
+          note:      existing.note      || mapped.note,
+          setup:     existing.setup     || mapped.setup,
+          grade:     existing.grade     || mapped.grade,
+          mistakes:  existing.mistakes  && existing.mistakes.length  ? existing.mistakes  : mapped.mistakes,
+          positives: existing.positives && existing.positives.length ? existing.positives : mapped.positives
+        });
+        updated++;
+      }
+    });
+
+    return { added, updated, skipped };
+  }
+
+  function mapDealToTrade(positionId, openDeal, closeDeal) {
+    const symbol = closeDeal.symbolName || openDeal.symbolName || '';
+    const dirRaw = (openDeal.tradeSide || openDeal.dealType || '').toString().toUpperCase();
+    const dir    = dirRaw.includes('BUY') || dirRaw === 'LONG' ? 'long'
+                 : dirRaw.includes('SELL') || dirRaw === 'SHORT' ? 'short' : '';
+    const entry  = openDeal.executionPrice || openDeal.price || '';
+    const exit   = closeDeal.executionPrice || closeDeal.price || '';
+    const lots   = (openDeal.volume || openDeal.filledVolume || 0) / 100; // cTrader volumes are in 0.01 lots
+    // PnL in account currency from close deal
+    const pnl    = closeDeal.closePositionDetail ? (closeDeal.closePositionDetail.grossProfit || closeDeal.closePositionDetail.netProfit || 0) : 0;
+    // Pips approximation (forex 4-decimal majors). If you trade indices/metals, override manually.
+    let pips = '';
+    if (entry && exit) {
+      const diff = (parseFloat(exit) - parseFloat(entry)) * (dir === 'short' ? -1 : 1);
+      const isJPY = /JPY/i.test(symbol);
+      const mult  = isJPY ? 100 : 10000;
+      pips = (diff * mult).toFixed(1);
+    }
+    return {
+      symbol:      symbol,
+      market:      guessMarket(symbol),
+      dir:         dir,
+      entry:       String(entry),
+      sl:          '',
+      tp:          '',
+      exit:        String(exit),
+      pips:        pips,
+      rr:          '',
+      session:     detectSession(openDeal.executionTimestamp || openDeal.createTimestamp),
+      tf:          '',
+      setup:       '',
+      lots:        String(lots || ''),
+      grade:       '',
+      mistakes:    [],
+      positives:   [],
+      note:        '',
+      pnl:         pnl,
+      // ─── meta ───
+      source:        'ctrader',
+      ctraderId:     positionId,
+      openTime:      openDeal.executionTimestamp  || openDeal.createTimestamp  || null,
+      closeTime:     closeDeal.executionTimestamp || closeDeal.createTimestamp || null,
+      manuallyEdited: false
+    };
+  }
+
+  function guessMarket(sym) {
+    if (!sym) return '';
+    const s = sym.toUpperCase();
+    if (/XAU|XAG|GOLD|SILVER/.test(s)) return 'Metals';
+    if (/BTC|ETH|XRP|SOL|DOGE/.test(s)) return 'Crypto';
+    if (/US30|NAS|SPX|DAX|UK100|JPN|NIK/.test(s)) return 'Indices';
+    if (/OIL|WTI|BRENT|NGAS/.test(s)) return 'Energy';
+    if (/USD|EUR|GBP|JPY|AUD|CAD|CHF|NZD/.test(s)) return 'Forex';
+    return '';
+  }
+  function detectSession(ts) {
+    if (!ts) return '';
+    const h = new Date(ts).getUTCHours();
+    if (h >= 0  && h < 7)  return 'Asia';
+    if (h >= 7  && h < 12) return 'London';
+    if (h >= 12 && h < 17) return 'NY';
+    return 'Late';
+  }
+
+  // ─── 10. DISCONNECT ────────────────────────────────────────────
+  window.ctDisconnect = async function() {
+    if (!confirm('Disconnect cTrader? Synced trades will remain in your journal.')) return;
+    ctState = { accessToken:null, refreshToken:null, expiresAt:0, accountId:null, accountLabel:null, accounts:[], lastSync:0, env:null };
+    if (window.db && window.currentUID) {
+      try { await db.collection('apexUsers').doc(currentUID).update({ ctrader: firebase.firestore.FieldValue.delete() }); } catch(e){}
+    }
+    render();
+    if (window.showToast) showToast('cTrader disconnected');
+  };
+
+  // ─── 11. MARK MANUAL EDITS ─────────────────────────────────────
+  // Hook into existing saveTradeEdit() so anything you edit by hand is locked from future overwrites.
+  function installManualEditHook() {
+    if (typeof window.saveTradeEdit !== 'function' || window.__ctHookInstalled) return;
+    const original = window.saveTradeEdit;
+    window.saveTradeEdit = function() {
+      try {
+        if (typeof window.editKey !== 'undefined' && typeof window.editIdx !== 'undefined'
+            && window.journalData && journalData[editKey] && journalData[editKey].trades[editIdx]) {
+          journalData[editKey].trades[editIdx].manuallyEdited = true;
+        }
+      } catch(e){}
+      return original.apply(this, arguments);
+    };
+    window.__ctHookInstalled = true;
+  }
+
+  // ─── 12. AUTO BACKGROUND SYNC ──────────────────────────────────
+  let pollTimer = null;
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(() => {
+      if (document.hidden) return;
+      if (ctState.accessToken && ctState.accountId) {
+        ctSyncNow().catch(()=>{});
+      }
+    }, POLL_INTERVAL_MS);
+  }
+
+  // ─── 13. BOOT ──────────────────────────────────────────────────
+  async function boot() {
+    mountUI();
+    installManualEditHook();
+    if (!window.currentUID) {
+      // wait for login
+      setTimeout(boot, 800);
+      return;
+    }
+    await loadState();
+    if (ctState.accessToken) {
+      try { await fetchAccounts(); } catch(e){ console.warn('[ctrader] accounts', e); }
+    }
+    render();
+    startPolling();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+
+
 </body>
 </html>
