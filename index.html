@@ -15235,13 +15235,11 @@ async function startProCheckout() {
   }
 })();
 </script>
-
 <!--
-  APEX <-> cTrader INTEGRATION
+  APEX <-> cTrader INTEGRATION (v2 — full-page redirect, mounted in Settings)
   ──────────────────────────────────────────────────────────────────
   PASTE THIS ENTIRE BLOCK in your index.html, directly BEFORE </body>.
-  Make sure to replace the WORKER_URL constant below with the URL of
-  your deployed Cloudflare Worker (e.g. https://apex-ctrader.you.workers.dev).
+  WORKER_URL is preconfigured for ctraderapi.4kjyyyftv6.workers.dev.
 
   Requires (already present in your app):
     - global var: db (Firestore compat)
@@ -15254,19 +15252,19 @@ async function startProCheckout() {
 
 <!-- ░░ STYLES ░░ -->
 <style>
-  /* cTrader connect button — drop into Settings */
   .ct-card {
     background: linear-gradient(145deg, rgba(15,19,23,0.97), rgba(9,11,14,0.99));
-    border: 0.5px solid var(--rim, rgba(201,168,76,0.08));
-    border-radius: 12px;
-    padding: 18px 20px;
-    display: flex; flex-direction: column; gap: 14px;
-    margin-top: 16px;
+    border: 0.5px solid rgba(201,168,76,0.12);
+    border-radius: 14px;
+    padding: 22px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+    max-width: 900px;
+    margin-top: 20px;
   }
   .ct-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .ct-title { font-family: var(--font-display, 'Syne'); font-size: 14px; font-weight: 700; color: var(--gold, #c9a84c); letter-spacing: 0.06em; }
-  .ct-status { font-family: var(--font-mono, 'DM Mono'); font-size: 11px; color: var(--ink2, #a89880); display: flex; align-items: center; gap: 6px; }
-  .ct-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink3, #5c5040); }
+  .ct-title { font-family: var(--font-display, 'Syne'); font-size: 14px; font-weight: 700; color: var(--gold, #c9a84c); letter-spacing: 0.08em; text-transform: uppercase; }
+  .ct-status { font-family: var(--font-mono, 'DM Mono'); font-size: 11px; color: var(--ink2, #a89880); display: flex; align-items: center; gap: 8px; }
+  .ct-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18); }
   .ct-dot.on { background: #3ecf8e; box-shadow: 0 0 6px #3ecf8e; }
   .ct-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .ct-btn {
@@ -15275,96 +15273,103 @@ async function startProCheckout() {
     color: var(--gold, #c9a84c);
     font-family: var(--font-body, 'Instrument Sans');
     font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
-    padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    padding: 10px 18px; border-radius: 8px; cursor: pointer;
     transition: all 0.15s;
   }
   .ct-btn:hover { background: rgba(201,168,76,0.16); border-color: rgba(201,168,76,0.5); }
   .ct-btn.danger { color: #f0636a; border-color: rgba(240,99,106,0.3); background: rgba(240,99,106,0.06); }
+  .ct-btn.danger:hover { background: rgba(240,99,106,0.16); }
   .ct-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .ct-select {
     background: rgba(13,16,20,0.8);
-    border: 0.5px solid var(--rim2, rgba(201,168,76,0.16));
+    border: 0.5px solid rgba(201,168,76,0.16);
     color: var(--ink, #f0ece6);
     font-family: var(--font-mono, 'DM Mono');
     font-size: 12px;
-    padding: 8px 10px; border-radius: 8px;
-    min-width: 220px;
+    padding: 9px 12px; border-radius: 8px;
+    min-width: 240px;
   }
-  .ct-meta { font-size: 10px; color: var(--ink3, #5c5040); letter-spacing: 0.08em; text-transform: uppercase; }
-  .ct-source-badge {
-    display: inline-block; padding: 2px 6px; border-radius: 4px;
-    font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
-    background: rgba(91,155,213,0.15); color: #5b9bd5;
-    margin-left: 6px; vertical-align: middle;
-  }
+  .ct-meta { font-size: 10px; color: rgba(168,152,128,0.7); letter-spacing: 0.08em; text-transform: uppercase; }
 </style>
-
-<!-- ░░ UI (auto-mounted into #settingsView or #settings; fallback: appended to body) ░░ -->
-<div id="ctIntegrationCard" class="ct-card" style="display:none">
-  <div class="ct-head">
-    <div class="ct-title">CTRADER · AUTO-SYNC</div>
-    <div class="ct-status"><span id="ctDot" class="ct-dot"></span><span id="ctStatusText">Not connected</span></div>
-  </div>
-  <div id="ctConnectRow" class="ct-row">
-    <button class="ct-btn" onclick="ctStartOAuth('demo')">Connect Demo</button>
-    <button class="ct-btn" onclick="ctStartOAuth('live')">Connect Live</button>
-    <span class="ct-meta">OAuth · secret stays on the Worker</span>
-  </div>
-  <div id="ctConnectedRow" class="ct-row" style="display:none">
-    <select id="ctAccountSelect" class="ct-select"></select>
-    <button class="ct-btn" onclick="ctSyncNow()">Sync Now</button>
-    <button class="ct-btn" onclick="ctSyncNow(30)">Sync Last 30d</button>
-    <button class="ct-btn danger" onclick="ctDisconnect()">Disconnect</button>
-  </div>
-  <div id="ctLastSync" class="ct-meta"></div>
-</div>
 
 <!-- ░░ LOGIC ░░ -->
 <script>
 (function(){
   // ─── 0. CONFIG ─────────────────────────────────────────────────
-  const WORKER_URL = "https://YOUR-WORKER.workers.dev"; // <<<<<< REPLACE
-  const POLL_INTERVAL_MS = 5 * 60 * 1000; // background re-sync every 5 minutes when tab is active
+  const WORKER_URL = "https://ctraderapi.4kjyyyftv6.workers.dev";
+  const POLL_INTERVAL_MS = 5 * 60 * 1000;
 
   // ─── 1. STATE ──────────────────────────────────────────────────
   let ctState = {
     accessToken:  null,
     refreshToken: null,
-    expiresAt:    0,          // ms epoch
-    accountId:    null,       // ctidTraderAccountId
+    expiresAt:    0,
+    accountId:    null,
     accountLabel: null,
+    accountEnv:   null,
     accounts:     [],
     lastSync:     0,
-    env:          null        // 'demo' | 'live'
+    env:          null
   };
+  let cardEl = null;
 
-  // ─── 2. UI MOUNTING ────────────────────────────────────────────
-  function mountUI() {
-    const card = document.getElementById('ctIntegrationCard');
-    if (!card) return;
-    // Try common settings containers in order
-    const targets = [
-      '#settingsView .settings-section:last-of-type',
-      '#settingsView',
-      '#settings',
-      '#settingsTab',
-      '#view-settings'
-    ];
-    for (const sel of targets) {
-      const el = document.querySelector(sel);
-      if (el) { el.appendChild(card); card.style.display = 'flex'; return; }
-    }
-    // Fallback: show floating in body
-    document.body.appendChild(card);
-    card.style.display = 'flex';
-    card.style.position = 'fixed';
-    card.style.bottom = '20px';
-    card.style.right  = '20px';
-    card.style.maxWidth = '420px';
-    card.style.zIndex = '500';
+  // ─── 2. CARD CREATION ──────────────────────────────────────────
+  function buildCard() {
+    const card = document.createElement('div');
+    card.id = 'ctIntegrationCard';
+    card.className = 'ct-card';
+    card.innerHTML = `
+      <div class="ct-head">
+        <div class="ct-title">cTrader Auto-Sync</div>
+        <div class="ct-status"><span id="ctDot" class="ct-dot"></span><span id="ctStatusText">Not connected</span></div>
+      </div>
+      <div id="ctConnectRow" class="ct-row">
+        <button class="ct-btn" id="ctBtnDemo">Connect Demo</button>
+        <button class="ct-btn" id="ctBtnLive">Connect Live</button>
+        <span class="ct-meta">OAuth — secret stays on the Worker</span>
+      </div>
+      <div id="ctConnectedRow" class="ct-row" style="display:none">
+        <select id="ctAccountSelect" class="ct-select"></select>
+        <button class="ct-btn" id="ctBtnSync">Sync Now</button>
+        <button class="ct-btn" id="ctBtnSync30">Sync Last 30d</button>
+        <button class="ct-btn danger" id="ctBtnDisconnect">Disconnect</button>
+      </div>
+      <div id="ctLastSync" class="ct-meta"></div>
+    `;
+    card.querySelector('#ctBtnDemo').onclick       = () => ctStartOAuth('demo');
+    card.querySelector('#ctBtnLive').onclick       = () => ctStartOAuth('live');
+    card.querySelector('#ctBtnSync').onclick       = () => ctSyncNow();
+    card.querySelector('#ctBtnSync30').onclick     = () => ctSyncNow(30);
+    card.querySelector('#ctBtnDisconnect').onclick = () => ctDisconnect();
+    return card;
   }
 
-  // ─── 3. FIRESTORE PERSISTENCE ──────────────────────────────────
+  // ─── 3. MOUNT (above logout button, inside Settings page) ──────
+  function tryMount() {
+    if (cardEl && document.body.contains(cardEl)) return true;
+    const logoutBtn = document.querySelector('button[onclick="logout()"]');
+    if (!logoutBtn) return false;
+    const logoutWrapper = logoutBtn.closest('div[style*="max-width:900px"]') || logoutBtn.parentNode;
+    if (!logoutWrapper || !logoutWrapper.parentNode) return false;
+    cardEl = buildCard();
+    logoutWrapper.parentNode.insertBefore(cardEl, logoutWrapper);
+    render();
+    return true;
+  }
+
+  // Watch for the settings page being rendered (it's built dynamically in your app)
+  function observeSettings() {
+    const obs = new MutationObserver(() => { tryMount(); });
+    obs.observe(document.body, { childList: true, subtree: true });
+    // Also poll for first 30s as a fallback
+    let tries = 0;
+    const poll = setInterval(() => {
+      tries++;
+      if (tryMount() || tries > 60) clearInterval(poll);
+    }, 500);
+  }
+
+  // ─── 4. FIRESTORE PERSISTENCE ──────────────────────────────────
   async function loadState() {
     if (!window.db || !window.currentUID) return;
     try {
@@ -15385,6 +15390,7 @@ async function startProCheckout() {
           expiresAt:    ctState.expiresAt,
           accountId:    ctState.accountId,
           accountLabel: ctState.accountLabel,
+          accountEnv:   ctState.accountEnv,
           lastSync:     ctState.lastSync,
           env:          ctState.env
         }
@@ -15392,113 +15398,124 @@ async function startProCheckout() {
     } catch(e) { console.warn('[ctrader] saveState', e); }
   }
 
-  // ─── 4. UI RENDERING ───────────────────────────────────────────
+  // ─── 5. RENDER ─────────────────────────────────────────────────
   function render() {
-    const dot       = document.getElementById('ctDot');
-    const statusTxt = document.getElementById('ctStatusText');
-    const connRow   = document.getElementById('ctConnectRow');
-    const linkedRow = document.getElementById('ctConnectedRow');
-    const lastSync  = document.getElementById('ctLastSync');
-    const sel       = document.getElementById('ctAccountSelect');
-    if (!dot) return;
+    if (!cardEl) return;
+    const dot       = cardEl.querySelector('#ctDot');
+    const statusTxt = cardEl.querySelector('#ctStatusText');
+    const connRow   = cardEl.querySelector('#ctConnectRow');
+    const linkedRow = cardEl.querySelector('#ctConnectedRow');
+    const lastSync  = cardEl.querySelector('#ctLastSync');
+    const sel       = cardEl.querySelector('#ctAccountSelect');
+    const isLinked  = !!ctState.accessToken;
 
-    const isLinked = !!ctState.accessToken;
     dot.classList.toggle('on', isLinked);
     statusTxt.textContent = isLinked
-      ? `Connected · ${ctState.env ? ctState.env.toUpperCase() : ''}${ctState.accountLabel ? ' · ' + ctState.accountLabel : ''}`
+      ? 'Connected' + (ctState.env ? ' · ' + ctState.env.toUpperCase() : '') + (ctState.accountLabel ? ' · ' + ctState.accountLabel : '')
       : 'Not connected';
     connRow.style.display   = isLinked ? 'none' : 'flex';
     linkedRow.style.display = isLinked ? 'flex' : 'none';
 
     if (sel && ctState.accounts && ctState.accounts.length) {
-      sel.innerHTML = ctState.accounts.map(a =>
-        `<option value="${a.ctidTraderAccountId}" ${String(a.ctidTraderAccountId)===String(ctState.accountId)?'selected':''}>${(a.accountNumber||a.ctidTraderAccountId) + (a.live?' · LIVE':' · DEMO') + (a.brokerName?' · '+a.brokerName:'')}</option>`
-      ).join('');
+      sel.innerHTML = ctState.accounts.map(a => {
+        const label = (a.accountNumber || a.ctidTraderAccountId)
+                    + (a._env === 'live' ? ' · LIVE' : ' · DEMO')
+                    + (a.brokerName ? ' · ' + a.brokerName : '');
+        return `<option value="${a.ctidTraderAccountId}" ${String(a.ctidTraderAccountId)===String(ctState.accountId)?'selected':''}>${label}</option>`;
+      }).join('');
       sel.onchange = function() {
-        ctState.accountId = sel.value;
         const acc = ctState.accounts.find(a => String(a.ctidTraderAccountId) === String(sel.value));
+        ctState.accountId    = sel.value;
         ctState.accountLabel = acc ? (acc.accountNumber || acc.ctidTraderAccountId) : null;
-        saveState();
-        render();
+        ctState.accountEnv   = acc ? acc._env : null;
+        saveState(); render();
       };
     }
-    if (lastSync) {
-      lastSync.textContent = ctState.lastSync
-        ? 'Last sync: ' + new Date(ctState.lastSync).toLocaleString()
-        : '';
-    }
+    if (lastSync) lastSync.textContent = ctState.lastSync ? 'Last sync: ' + new Date(ctState.lastSync).toLocaleString() : '';
   }
 
-  // ─── 5. OAUTH FLOW ─────────────────────────────────────────────
-  window.ctStartOAuth = function(env) {
-    if (WORKER_URL.includes('YOUR-WORKER')) {
-      alert('Please set WORKER_URL in the ctrader snippet first.');
-      return;
-    }
-    ctState.env = env || 'demo';
-    const url = `${WORKER_URL}/oauth/start?state=${encodeURIComponent(currentUID||'')}&scope=trading`;
-    const w = window.open(url, 'ctrader_oauth', 'width=560,height=720');
-    if (!w) { alert('Popup blocked. Please allow popups for this site.'); return; }
-  };
+  // ─── 6. OAUTH (full-page redirect) ─────────────────────────────
+  function ctStartOAuth(envType) {
+    if (!window.currentUID) { alert('Please log in first.'); return; }
+    ctState.env = envType;
+    saveState();
+    const origin = location.origin;
+    const url = `${WORKER_URL}/oauth/start?uid=${encodeURIComponent(currentUID)}&env=${envType}&origin=${encodeURIComponent(origin)}`;
+    location.href = url;
+  }
 
-  window.addEventListener('message', async (ev) => {
-    if (!ev.data || ev.data.source !== 'apex-ctrader') return;
-    const p = ev.data.payload || {};
-    if (p.error) {
-      if (window.showToast) showToast('cTrader: ' + p.error);
-      else alert('cTrader error: ' + p.error);
-      return;
-    }
-    if (p.accessToken) {
-      ctState.accessToken  = p.accessToken;
-      ctState.refreshToken = p.refreshToken;
-      ctState.expiresAt    = Date.now() + (p.expiresIn ? p.expiresIn*1000 : 30*60*1000);
-      await fetchAccounts();
-      await saveState();
-      render();
-      if (window.showToast) showToast('cTrader connected');
-    }
-  });
+  // ─── 7. PROCESS CALLBACK HASH ──────────────────────────────────
+  async function processAuthHash() {
+    const m = location.hash.match(/ctrader_auth=([^&]+)/);
+    if (!m) return false;
+    let payload;
+    try { payload = JSON.parse(atob(m[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+    catch { return false; }
+    // Clean URL immediately
+    history.replaceState(null, '', location.pathname + location.search);
 
-  // ─── 6. ACCOUNTS ───────────────────────────────────────────────
+    if (!payload.ok) {
+      alert('cTrader auth failed: ' + (payload.error || 'unknown'));
+      return true;
+    }
+    // Wait for currentUID before saving
+    let tries = 0;
+    while (!window.currentUID && tries < 40) { await sleep(250); tries++; }
+    ctState.accessToken  = payload.accessToken;
+    ctState.refreshToken = payload.refreshToken;
+    ctState.expiresAt    = Date.now() + (payload.expiresIn ? payload.expiresIn*1000 : 30*60*1000);
+    ctState.env          = payload.env || ctState.env;
+    try { await fetchAccounts(); } catch(e) { console.warn('[ctrader] fetchAccounts', e); }
+    await saveState();
+    render();
+    if (window.showToast) showToast('cTrader connected');
+    return true;
+  }
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+  // ─── 8. ACCOUNTS ───────────────────────────────────────────────
   async function fetchAccounts() {
     await ensureFreshToken();
-    const r = await fetch(`${WORKER_URL}/api/accounts?accessToken=${encodeURIComponent(ctState.accessToken)}`);
+    const r = await fetch(`${WORKER_URL}/api/accounts`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ access_token: ctState.accessToken })
+    });
     const data = await r.json();
-    // cTrader returns either {data:[...]} or array — normalize
-    const list = Array.isArray(data) ? data : (data.data || data.tradingAccounts || []);
-    ctState.accounts = list.map(a => ({
-      ctidTraderAccountId: a.ctidTraderAccountId || a.accountId || a.id,
-      accountNumber:       a.accountNumber || a.login || a.traderLogin,
+    ctState.accounts = (data.accounts || []).map(a => ({
+      ctidTraderAccountId: a.ctidTraderAccountId,
+      accountNumber:       a.accountNumber,
       brokerName:          a.brokerName || a.brokerTitleShort,
-      live:                a.live === true || a.environment === 'LIVE' || /live/i.test(a.environmentName||'')
+      _env:                a._env || 'demo'
     })).filter(a => a.ctidTraderAccountId);
     if (!ctState.accountId && ctState.accounts.length) {
       ctState.accountId    = ctState.accounts[0].ctidTraderAccountId;
       ctState.accountLabel = ctState.accounts[0].accountNumber;
+      ctState.accountEnv   = ctState.accounts[0]._env;
     }
   }
 
-  // ─── 7. TOKEN REFRESH ──────────────────────────────────────────
+  // ─── 9. TOKEN REFRESH ──────────────────────────────────────────
   async function ensureFreshToken() {
     if (!ctState.accessToken) throw new Error('not_connected');
-    if (Date.now() < ctState.expiresAt - 60_000) return; // still valid
+    if (Date.now() < ctState.expiresAt - 60_000) return;
     if (!ctState.refreshToken) throw new Error('no_refresh_token');
     const r = await fetch(`${WORKER_URL}/api/refresh`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ refreshToken: ctState.refreshToken })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ refresh_token: ctState.refreshToken })
     });
     const d = await r.json();
-    if (!d.accessToken) throw new Error('refresh_failed');
-    ctState.accessToken  = d.accessToken;
-    ctState.refreshToken = d.refreshToken || ctState.refreshToken;
-    ctState.expiresAt    = Date.now() + (d.expiresIn ? d.expiresIn*1000 : 30*60*1000);
+    const accessToken  = d.accessToken  || d.access_token;
+    const refreshToken = d.refreshToken || d.refresh_token;
+    const expiresIn    = d.expiresIn    || d.expires_in;
+    if (!accessToken) throw new Error('refresh_failed');
+    ctState.accessToken  = accessToken;
+    ctState.refreshToken = refreshToken || ctState.refreshToken;
+    ctState.expiresAt    = Date.now() + (expiresIn ? expiresIn*1000 : 30*60*1000);
     await saveState();
   }
 
-  // ─── 8. SYNC TRADES ────────────────────────────────────────────
-  window.ctSyncNow = async function(daysBack) {
+  // ─── 10. SYNC TRADES ───────────────────────────────────────────
+  async function ctSyncNow(daysBack) {
     if (!ctState.accessToken) { alert('Connect cTrader first.'); return; }
     if (!ctState.accountId)   { alert('Select an account first.'); return; }
     try {
@@ -15506,10 +15523,18 @@ async function startProCheckout() {
       const now  = Date.now();
       const from = daysBack
         ? now - daysBack*24*60*60*1000
-        : (ctState.lastSync ? ctState.lastSync - 60_000 : now - 90*24*60*60*1000); // default: last 90d on first sync
-      const url = `${WORKER_URL}/api/deals?accessToken=${encodeURIComponent(ctState.accessToken)}&ctidTraderAccountId=${ctState.accountId}&from=${from}&to=${now}&maxRows=1000`;
-      const r = await fetch(url);
-      const data = await r.json();
+        : (ctState.lastSync ? ctState.lastSync - 60_000 : now - 90*24*60*60*1000);
+      const r = await fetch(`${WORKER_URL}/api/deals`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          access_token:        ctState.accessToken,
+          ctidTraderAccountId: ctState.accountId,
+          accountEnv:          ctState.accountEnv,
+          fromTimestamp:       from,
+          toTimestamp:         now
+        })
+      });
+      const data  = await r.json();
       const deals = Array.isArray(data) ? data : (data.data || data.deals || []);
       const result = mergeDealsIntoJournal(deals);
       ctState.lastSync = now;
@@ -15517,114 +15542,81 @@ async function startProCheckout() {
       if (window.save) await save();
       if (window.renderTrades) renderTrades();
       render();
-      if (window.showToast) showToast(`cTrader sync: +${result.added} new, ${result.updated} updated, ${result.skipped} skipped`);
-      else alert(`Sync done: +${result.added} new · ${result.updated} updated · ${result.skipped} skipped (manually edited)`);
+      const msg = `cTrader sync: +${result.added} new · ${result.updated} updated · ${result.skipped} skipped`;
+      if (window.showToast) showToast(msg); else alert(msg);
     } catch(e) {
       console.error('[ctrader] sync', e);
       alert('Sync failed: ' + (e.message || e));
     }
-  };
+  }
 
-  // ─── 9. MERGE LOGIC (key by ctraderId, skip manuallyEdited) ────
+  // ─── 11. MERGE LOGIC ───────────────────────────────────────────
   function mergeDealsIntoJournal(deals) {
-    let added = 0, updated = 0, skipped = 0;
+    let added=0, updated=0, skipped=0;
     if (!window.journalData) window.journalData = {};
-
-    // Group cTrader deals by positionId so an open+close pair becomes ONE trade.
     const byPos = {};
     deals.forEach(d => {
       const pid = String(d.positionId || d.dealId);
-      if (!byPos[pid]) byPos[pid] = [];
-      byPos[pid].push(d);
+      (byPos[pid] = byPos[pid] || []).push(d);
     });
-
     Object.entries(byPos).forEach(([pid, group]) => {
-      // Sort chronologically (open first, close last)
       group.sort((a,b) => (a.executionTimestamp||a.createTimestamp||0) - (b.executionTimestamp||b.createTimestamp||0));
       const openDeal  = group[0];
       const closeDeal = group[group.length-1];
-      // Only journal CLOSED positions
-      if (group.length < 2 && !closeDeal.closePositionDetail) return;
+      if (group.length < 2 && !closeDeal.closePositionDetail) return; // only journal CLOSED positions
 
-      const closeTs   = closeDeal.executionTimestamp || closeDeal.createTimestamp;
-      const dateKey   = new Date(closeTs).toISOString().slice(0,10); // UTC YYYY-MM-DD
+      const closeTs = closeDeal.executionTimestamp || closeDeal.createTimestamp;
+      const dateKey = new Date(closeTs).toISOString().slice(0,10);
       if (!journalData[dateKey]) journalData[dateKey] = { trades: [], notes: '', disc:5, conf:5, focus:5, pat:5 };
-
       const trades = journalData[dateKey].trades;
-      const existingIdx = trades.findIndex(t => t.ctraderId && String(t.ctraderId) === pid);
-
+      const idx = trades.findIndex(t => t.ctraderId && String(t.ctraderId) === pid);
       const mapped = mapDealToTrade(pid, openDeal, closeDeal);
 
-      if (existingIdx === -1) {
-        trades.push(mapped);
-        added++;
-      } else {
-        const existing = trades[existingIdx];
-        if (existing.manuallyEdited) { skipped++; return; }
-        // Preserve user-added fields (note, setup, grade, mistakes, positives) — only refresh raw market data
-        trades[existingIdx] = Object.assign({}, existing, mapped, {
-          note:      existing.note      || mapped.note,
-          setup:     existing.setup     || mapped.setup,
-          grade:     existing.grade     || mapped.grade,
-          mistakes:  existing.mistakes  && existing.mistakes.length  ? existing.mistakes  : mapped.mistakes,
-          positives: existing.positives && existing.positives.length ? existing.positives : mapped.positives
+      if (idx === -1) { trades.push(mapped); added++; }
+      else {
+        const ex = trades[idx];
+        if (ex.manuallyEdited) { skipped++; return; }
+        trades[idx] = Object.assign({}, ex, mapped, {
+          note:      ex.note      || mapped.note,
+          setup:     ex.setup     || mapped.setup,
+          grade:     ex.grade     || mapped.grade,
+          mistakes:  ex.mistakes  && ex.mistakes.length  ? ex.mistakes  : mapped.mistakes,
+          positives: ex.positives && ex.positives.length ? ex.positives : mapped.positives
         });
         updated++;
       }
     });
-
     return { added, updated, skipped };
   }
-
   function mapDealToTrade(positionId, openDeal, closeDeal) {
     const symbol = closeDeal.symbolName || openDeal.symbolName || '';
     const dirRaw = (openDeal.tradeSide || openDeal.dealType || '').toString().toUpperCase();
-    const dir    = dirRaw.includes('BUY') || dirRaw === 'LONG' ? 'long'
-                 : dirRaw.includes('SELL') || dirRaw === 'SHORT' ? 'short' : '';
-    const entry  = openDeal.executionPrice || openDeal.price || '';
+    const dir    = dirRaw.includes('BUY') || dirRaw === 'LONG'  ? 'long'
+                 : dirRaw.includes('SELL')|| dirRaw === 'SHORT' ? 'short' : '';
+    const entry  = openDeal.executionPrice  || openDeal.price || '';
     const exit   = closeDeal.executionPrice || closeDeal.price || '';
-    const lots   = (openDeal.volume || openDeal.filledVolume || 0) / 100; // cTrader volumes are in 0.01 lots
-    // PnL in account currency from close deal
+    const lots   = (openDeal.volume || openDeal.filledVolume || 0) / 100;
     const pnl    = closeDeal.closePositionDetail ? (closeDeal.closePositionDetail.grossProfit || closeDeal.closePositionDetail.netProfit || 0) : 0;
-    // Pips approximation (forex 4-decimal majors). If you trade indices/metals, override manually.
     let pips = '';
     if (entry && exit) {
-      const diff = (parseFloat(exit) - parseFloat(entry)) * (dir === 'short' ? -1 : 1);
+      const diff  = (parseFloat(exit) - parseFloat(entry)) * (dir === 'short' ? -1 : 1);
       const isJPY = /JPY/i.test(symbol);
-      const mult  = isJPY ? 100 : 10000;
-      pips = (diff * mult).toFixed(1);
+      pips = (diff * (isJPY ? 100 : 10000)).toFixed(1);
     }
     return {
-      symbol:      symbol,
-      market:      guessMarket(symbol),
-      dir:         dir,
-      entry:       String(entry),
-      sl:          '',
-      tp:          '',
-      exit:        String(exit),
-      pips:        pips,
-      rr:          '',
-      session:     detectSession(openDeal.executionTimestamp || openDeal.createTimestamp),
-      tf:          '',
-      setup:       '',
-      lots:        String(lots || ''),
-      grade:       '',
-      mistakes:    [],
-      positives:   [],
-      note:        '',
-      pnl:         pnl,
-      // ─── meta ───
-      source:        'ctrader',
-      ctraderId:     positionId,
-      openTime:      openDeal.executionTimestamp  || openDeal.createTimestamp  || null,
-      closeTime:     closeDeal.executionTimestamp || closeDeal.createTimestamp || null,
+      symbol, market: guessMarket(symbol), dir,
+      entry: String(entry), sl:'', tp:'', exit: String(exit),
+      pips, rr:'', session: detectSession(openDeal.executionTimestamp || openDeal.createTimestamp),
+      tf:'', setup:'', lots: String(lots || ''), grade:'',
+      mistakes:[], positives:[], note:'', pnl,
+      source:'ctrader', ctraderId: positionId,
+      openTime:  openDeal.executionTimestamp  || openDeal.createTimestamp  || null,
+      closeTime: closeDeal.executionTimestamp || closeDeal.createTimestamp || null,
       manuallyEdited: false
     };
   }
-
-  function guessMarket(sym) {
-    if (!sym) return '';
-    const s = sym.toUpperCase();
+  function guessMarket(s) {
+    if (!s) return ''; s = s.toUpperCase();
     if (/XAU|XAG|GOLD|SILVER/.test(s)) return 'Metals';
     if (/BTC|ETH|XRP|SOL|DOGE/.test(s)) return 'Crypto';
     if (/US30|NAS|SPX|DAX|UK100|JPN|NIK/.test(s)) return 'Indices';
@@ -15633,27 +15625,22 @@ async function startProCheckout() {
     return '';
   }
   function detectSession(ts) {
-    if (!ts) return '';
-    const h = new Date(ts).getUTCHours();
-    if (h >= 0  && h < 7)  return 'Asia';
-    if (h >= 7  && h < 12) return 'London';
-    if (h >= 12 && h < 17) return 'NY';
-    return 'Late';
+    if (!ts) return ''; const h = new Date(ts).getUTCHours();
+    if (h<7) return 'Asia'; if (h<12) return 'London'; if (h<17) return 'NY'; return 'Late';
   }
 
-  // ─── 10. DISCONNECT ────────────────────────────────────────────
-  window.ctDisconnect = async function() {
+  // ─── 12. DISCONNECT ────────────────────────────────────────────
+  async function ctDisconnect() {
     if (!confirm('Disconnect cTrader? Synced trades will remain in your journal.')) return;
-    ctState = { accessToken:null, refreshToken:null, expiresAt:0, accountId:null, accountLabel:null, accounts:[], lastSync:0, env:null };
+    ctState = { accessToken:null, refreshToken:null, expiresAt:0, accountId:null, accountLabel:null, accountEnv:null, accounts:[], lastSync:0, env:null };
     if (window.db && window.currentUID) {
       try { await db.collection('apexUsers').doc(currentUID).update({ ctrader: firebase.firestore.FieldValue.delete() }); } catch(e){}
     }
     render();
     if (window.showToast) showToast('cTrader disconnected');
-  };
+  }
 
-  // ─── 11. MARK MANUAL EDITS ─────────────────────────────────────
-  // Hook into existing saveTradeEdit() so anything you edit by hand is locked from future overwrites.
+  // ─── 13. MANUAL EDIT HOOK ──────────────────────────────────────
   function installManualEditHook() {
     if (typeof window.saveTradeEdit !== 'function' || window.__ctHookInstalled) return;
     const original = window.saveTradeEdit;
@@ -15669,42 +15656,38 @@ async function startProCheckout() {
     window.__ctHookInstalled = true;
   }
 
-  // ─── 12. AUTO BACKGROUND SYNC ──────────────────────────────────
+  // ─── 14. POLLING ───────────────────────────────────────────────
   let pollTimer = null;
   function startPolling() {
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(() => {
       if (document.hidden) return;
-      if (ctState.accessToken && ctState.accountId) {
-        ctSyncNow().catch(()=>{});
-      }
+      if (ctState.accessToken && ctState.accountId) ctSyncNow().catch(()=>{});
     }, POLL_INTERVAL_MS);
   }
 
-  // ─── 13. BOOT ──────────────────────────────────────────────────
+  // ─── 15. BOOT ──────────────────────────────────────────────────
   async function boot() {
-    mountUI();
-    installManualEditHook();
-    if (!window.currentUID) {
-      // wait for login
-      setTimeout(boot, 800);
-      return;
-    }
+    observeSettings();
+    // Re-install hook periodically (saveTradeEdit may be defined late)
+    setInterval(installManualEditHook, 1000);
+
+    let tries = 0;
+    while (!window.currentUID && tries < 80) { await sleep(250); tries++; }
     await loadState();
     if (ctState.accessToken) {
       try { await fetchAccounts(); } catch(e){ console.warn('[ctrader] accounts', e); }
     }
     render();
     startPolling();
+    await processAuthHash();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
 </script>
+
 
 
 </body>
